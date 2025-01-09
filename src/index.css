@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes wave {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-10px);
+	}
+}
+
+.animate-wave {
+	animation: wave 1.5s infinite;
+}
+
+.animate-wave-delay-1 {
+	animation-delay: 0.1s;
+}
+
+.animate-wave-delay-2 {
+	animation-delay: 0.2s;
+}
+
+.test-tailwind {
+	@apply bg-blue-500 text-white p-4 rounded;
+}
+
+@keyframes slide-in {
+	from {
+		transform: translateX(100%);
+		opacity: 0;
+	}
+	to {
+		transform: translateX(0);
+		opacity: 1;
+	}
+}
+
+.animate-slide-in {
+	animation: slide-in 0.3s ease-out forwards;
+}

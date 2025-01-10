@@ -1,16 +1,28 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
-// https://vite.dev/config/
+// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
   base: '/lyrics-to-song/',
+  plugins: [react()],
+  server: {
+    port: 5173,
+    strictPort: true,
+    host: true
+  },
   optimizeDeps: {
+    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
     include: ['bad-words']
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
   },
   build: {
     commonjsOptions: {
-      include: [/bad-words/, /node_modules/]
+      include: [/node_modules/]
     }
   }
 })

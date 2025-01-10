@@ -1,0 +1,20 @@
+{
+  "name": "Valentine's Song Generator",
+  "short_name": "Love Songs",
+  "icons": [
+    {
+      "src": "/lyrics-to-song/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/lyrics-to-song/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#EC4899",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "start_url": "/lyrics-to-song/"
+} 

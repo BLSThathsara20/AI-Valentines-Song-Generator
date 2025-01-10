@@ -11,6 +11,10 @@ import { ValentineCaptcha } from './ValentineCaptcha';
 import { profanityFilter } from '../services/profanityFilter';
 import { CustomMusicPlayer } from './CustomMusicPlayer';
 import { ShareButton } from './ShareButton';
+import { ProcessingStatus } from './ProcessingStatus';
+import { StickyPlayer } from './StickyPlayer';
+import { playSuccessSound } from '../utils/audio';
+import { ShareSongEmail } from './ShareSongEmail';
 
 const API_KEY = import.meta.env.VITE_SUNO_API_KEY;
 const HISTORY_KEY = 'music_generation_history';
@@ -18,7 +22,7 @@ const HISTORY_KEY = 'music_generation_history';
 console.log('API Key loaded:', API_KEY ? 'Yes' : 'No');
 
 if (!API_KEY) {
-  console.error('API key is not defined in environment variables');
+  console.error('API key is missing. Please check your .env file');
 }
 
 const APP_ENABLED = import.meta.env.VITE_APP_ENABLED === 'true';
@@ -301,6 +305,12 @@ export default function MusicGenerator() {
   const [showCaptcha, setShowCaptcha] = useState(true);
   const [hasFilteredContent, setHasFilteredContent] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [processingTasks, setProcessingTasks] = useState<Set<string>>(new Set());
+  const [currentSong, setCurrentSong] = useState<{url: string; title: string} | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [showEmailShare, setShowEmailShare] = useState(false);
+  const [shareableSong, setShareableSong] = useState<{title: string; url: string} | null>(null);
 
   // Add this effect at the top of your component, right after the state declarations
   useEffect(() => {
@@ -327,12 +337,16 @@ export default function MusicGenerator() {
 
   // Function to fetch task details
   const fetchTaskDetails = async (taskId: string) => {
+    if (!taskId) return null;
+    
     try {
       const response = await axios.get<TaskResponse>(
         `https://api.piapi.ai/api/v1/task/${taskId}`,
         {
           headers: {
-            'X-API-Key': API_KEY
+            'Authorization': `Bearer ${API_KEY}`,
+            'X-API-Key': API_KEY,
+            'Accept': 'application/json'
           }
         }
       );
@@ -363,65 +377,71 @@ export default function MusicGenerator() {
   // Update the history update effect
   useEffect(() => {
     const updateHistoryWithCompletedTasks = async () => {
-      const savedHistory = localStorage.getItem(HISTORY_KEY);
-      if (!savedHistory) return;
+      const pendingItems = history.filter(item => item.status === 'pending');
+      
+      if (pendingItems.length === 0) {
+        setProcessingTasks(new Set()); // Clear processing tasks when none are pending
+        return;
+      }
 
-      const parsedHistory: GenerationHistoryItem[] = JSON.parse(savedHistory);
       let hasUpdates = false;
+      const newProcessingTasks = new Set(processingTasks);
 
       const updatedHistory = await Promise.all(
-        parsedHistory.map(async (item) => {
-          // Only check status for pending items
+        history.map(async (item) => {
           if (item.status === 'pending') {
-            const taskDetails = await fetchTaskDetails(item.id);
-            if (taskDetails) {
-              const isCompleted = taskDetails.data.status === 'completed';
-              const isFailed = taskDetails.data.status === 'failed';
+            try {
+              const taskDetails = await fetchTaskDetails(item.id);
+              if (!taskDetails) return item;
 
-              if (isCompleted || isFailed) {
+              const status = taskDetails.data.status;
+              const songs = taskDetails.data.output?.songs;
+
+              if (status === 'completed' || status === 'failed') {
                 hasUpdates = true;
-                if (isCompleted) {
+                newProcessingTasks.delete(item.id); // Remove from processing tasks
+                
+                if (status === 'completed' && !completedTasksRef.current.has(item.id)) {
                   playSuccessBeep();
+                  completedTasksRef.current.add(item.id);
+                  
+                  // Show completion notification
+                  setNotification({
+                    type: 'success',
+                    message: '💝 Your love song has been created!',
+                    duration: 5000
+                  });
                 }
+
                 return {
                   ...item,
-                  status: isCompleted ? 'completed' as const : 'failed' as const,
-                  songs: isCompleted ? taskDetails.data.output.songs || [] : undefined,
-                  error: isFailed ? taskDetails.data.error?.message : undefined,
+                  status: status,
+                  songs: status === 'completed' ? songs : undefined,
+                  error: status === 'failed' ? taskDetails.data.error?.message : undefined,
                   completedAt: Date.now()
                 };
+              } else {
+                newProcessingTasks.add(item.id); // Add to processing tasks
               }
+            } catch (error) {
+              console.error(`Error checking task ${item.id}:`, error);
             }
           }
           return item;
         })
       );
 
-      // Only update if there were changes
+      setProcessingTasks(newProcessingTasks);
       if (hasUpdates) {
         updateHistory(updatedHistory);
       }
     };
 
-    // Track active intervals
-    let intervalId: number | null = null;
+    const intervalId = setInterval(updateHistoryWithCompletedTasks, 5000);
+    updateHistoryWithCompletedTasks();
 
-    // Only set up interval if there are pending tasks
-    const hasPendingTasks = history.some(item => item.status === 'pending');
-    
-    if (hasPendingTasks) {
-      // Initial check
-      updateHistoryWithCompletedTasks();
-      // Set up periodic check only if there are pending tasks
-      intervalId = window.setInterval(updateHistoryWithCompletedTasks, 5000);
-    }
-
-    return () => {
-      if (intervalId !== null) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [history]); // Add history as dependency to react to new tasks
+    return () => clearInterval(intervalId);
+  }, [history]);
 
   // Update the addToHistory function
   const addToHistory = (item: HistoryItemInput) => {
@@ -493,54 +513,41 @@ export default function MusicGenerator() {
       const imageUrl = getSongUrl(song.image_path);
 
       return (
-        <div className="bg-white rounded-lg p-2 md:p-3 shadow-sm">
-          <div className="flex items-center gap-2 md:gap-3">
-            <img 
-              src={imageUrl}
-              alt={song.title}
-              className="w-12 h-12 md:w-16 md:h-16 rounded-lg object-cover"
-            />
-            <div className="flex-1">
-              <h4 className="font-medium text-gray-800">{song.title}</h4>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {song.tags.slice(0, 3).map(tag => (
-                  <span key={tag} className="text-xs bg-pink-100 text-pink-800 px-2 py-0.5 rounded-full">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <ShareButton 
-              title={song.title} 
-              url={songUrl}
-            />
-          </div>
-          
-          <div className="mt-3">
-            <CustomMusicPlayer src={songUrl} title={song.title} />
-            <button
-              onClick={() => {
-                const link = document.createElement('a');
-                link.href = songUrl;
-                link.download = `${song.title}.mp3`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-              }}
-              className="mt-2 w-full text-pink-600 hover:text-pink-700 text-sm font-medium flex items-center justify-center gap-1"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Download Song
-            </button>
-          </div>
+        <div className="mb-4">
+          <CustomMusicPlayer 
+            src={songUrl} 
+            title={song.title}
+            tags={song.tags.slice(0, 3)}
+            imageUrl={imageUrl}
+            onPlay={(songData) => {
+              setCurrentSong(songData);
+              setIsPlaying(true);
+            }}
+            isGlobalPlaying={isPlaying}
+            isCurrentSong={currentSong?.url === songUrl}
+            onShareEmail={() => {
+              setShareableSong({
+                title: song.title,
+                url: songUrl
+              });
+              setShowEmailShare(true);
+            }}
+          />
         </div>
       );
     };
-  }, []); // Empty dependency array since this is a static component
+  }, [setCurrentSong, setIsPlaying]);
 
   const generateMusic = async () => {
+    if (!API_KEY) {
+      setNotification({
+        type: 'error',
+        message: 'API key is missing. Please check your configuration.',
+        duration: 5000
+      });
+      return;
+    }
+
     if (!APP_ENABLED) {
       setNotification({
         type: 'error',
@@ -559,16 +566,11 @@ export default function MusicGenerator() {
       ? ['male_vocals', 'male_voice', 'male_singer']
       : ['female_vocals', 'female_voice', 'female_singer'];
 
-    // Build the voice description
-    const voiceDescription = isFemaleSinger 
-      ? 'female vocal, female singer, female voice'
-      : 'male vocal, male singer, male voice';
-
     const requestData = {
       model: 'music-u',
       task_type: 'generate_music',
       input: {
-        gpt_description_prompt: `${voiceDescription}, ${selectedOptions.genre}, ${selectedOptions.mood}, ${selectedOptions.era}`,
+        gpt_description_prompt: `${selectedOptions.voiceType}, ${selectedOptions.genre}, ${selectedOptions.mood}, ${selectedOptions.era}`,
         lyrics_type: 'user',
         make_instrumental: false,
         negative_tags: negativeTags.join(','),
@@ -582,99 +584,47 @@ export default function MusicGenerator() {
       setIsLoading(true);
       const startTime = Date.now();
 
-      const response = await axios.post('https://api.piapi.ai/v1/music/tasks', requestData, {
+      const response = await axios.post('https://api.piapi.ai/api/v1/task', requestData, {
         headers: {
           'Authorization': `Bearer ${API_KEY}`,
-          'Content-Type': 'application/json'
+          'X-API-Key': API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
       });
 
-      const taskId = response.data.task_id;
-      
-      // Add to history immediately with pending status
+      const newTaskId = response.data.data.task_id;
+      setTaskId(newTaskId);
+      setProcessingTasks(prev => new Set(prev).add(newTaskId)); // Add to processing tasks
+
+      // Add to history immediately
       const historyItem: HistoryItemInput = {
-        id: taskId,
+        id: newTaskId,
         prompt: prompt,
         status: 'pending',
         timestamp: startTime,
         tags: `${selectedOptions.voiceType}, ${selectedOptions.genre}, ${selectedOptions.mood}, ${selectedOptions.era}`
       };
 
-      addToHistory(historyItem);
-      setPendingCount(prev => prev + 1);
+      const newHistory = [historyItem, ...history];
+      updateHistory(newHistory);
 
-      // Poll for completion
-      const pollInterval = setInterval(async () => {
-        try {
-          const statusResponse = await axios.get(
-            `https://api.piapi.ai/v1/music/tasks/${taskId}`,
-            {
-              headers: { 'Authorization': `Bearer ${API_KEY}` }
-            }
-          );
+      setNotification({
+        type: 'success',
+        message: 'Music generation started! This may take a few minutes...',
+        duration: 5000
+      });
 
-          const { status, output, meta } = statusResponse.data;
-
-          if (status === 'completed') {
-            clearInterval(pollInterval);
-            setPendingCount(prev => prev - 1);
-
-            // Play success sound
-            if (!completedTasksRef.current.has(taskId)) {
-              playSuccessBeep();
-              completedTasksRef.current.add(taskId);
-            }
-
-            // Calculate generation time
-            const endTime = meta?.ended_at 
-              ? new Date(meta.ended_at).getTime()
-              : Date.now();
-            const startTimeFromMeta = meta?.started_at 
-              ? new Date(meta.started_at).getTime()
-              : startTime;
-
-            // Update history with completed status and songs
-            updateHistoryItem(taskId, {
-              status: 'completed',
-              songs: output.songs,
-              completedAt: endTime,
-              timestamp: startTimeFromMeta
-            });
-
-            setNotification({
-              type: 'success',
-              message: '💝 Your love song has been created!',
-              duration: 5000
-            });
-
-            setIsLoading(false);
-          } else if (status === 'failed') {
-            clearInterval(pollInterval);
-            setPendingCount(prev => prev - 1);
-            
-            // Update history with error
-            updateHistoryItem(taskId, {
-              status: 'failed',
-              error: statusResponse.data.error?.message || 'Failed to generate music'
-            });
-
-            setNotification({
-              type: 'error',
-              message: 'Failed to generate song. Please try again.',
-              duration: 5000
-            });
-
-            setIsLoading(false);
-          }
-        } catch (error) {
-          console.error('Error polling status:', error);
-        }
-      }, 5000); // Poll every 5 seconds
-
+      setIsLoading(false);
     } catch (error) {
       setIsLoading(false);
-      const errorMessage = getErrorMessage(error);
+      setProcessingTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId || '');
+        return newSet;
+      });
       
+      const errorMessage = getErrorMessage(error);
       setNotification({
         type: 'error',
         message: errorMessage,
@@ -888,8 +838,34 @@ export default function MusicGenerator() {
     updateHistory(newHistory);
   };
 
+  // Add audio management
+  useEffect(() => {
+    const handleAudioStateChange = (e: CustomEvent) => {
+      if (e.detail.isPlaying && currentSong && e.detail.url !== currentSong.url) {
+        setIsPlaying(false);
+      }
+    };
+
+    window.addEventListener('audioStateChange' as any, handleAudioStateChange);
+    return () => {
+      window.removeEventListener('audioStateChange' as any, handleAudioStateChange);
+    };
+  }, [currentSong]);
+
+  // Update the completion handler
+  const handleSongCompletion = (song: any) => {
+    playSuccessSound();
+    setCurrentSong({
+      url: song.url,
+      title: song.title || 'Valentine\'s Song'
+    });
+    setIsPlaying(true);
+  };
+
   return (
     <>
+      <ProcessingStatus processingCount={processingTasks.size} />
+      
       {!APP_ENABLED ? (
         <MaintenanceMessage />
       ) : (
@@ -1167,14 +1143,14 @@ export default function MusicGenerator() {
                       <button
                         className="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                         onClick={generateMusic}
-                        disabled={isLoading || pendingCount > 0}
+                        disabled={isLoading || processingTasks.size > 0}
                       >
                         {isLoading ? (
                           <span className="flex items-center gap-2">
                             <LoadingWave />
                             Creating Your Song...
                           </span>
-                        ) : pendingCount > 0 ? (
+                        ) : processingTasks.size > 0 ? (
                           <>
                             <LoadingWave />
                             Please wait for current song...
@@ -1348,6 +1324,20 @@ export default function MusicGenerator() {
             </div>
           )}
         </>
+      )}
+      
+      <StickyPlayer
+        currentSong={currentSong}
+        isPlaying={isPlaying}
+        onPlayPause={setIsPlaying}
+        onClose={() => setCurrentSong(null)}
+      />
+      {showEmailShare && shareableSong && (
+        <ShareSongEmail
+          songTitle={shareableSong.title}
+          songUrl={shareableSong.url}
+          onClose={() => setShowEmailShare(false)}
+        />
       )}
     </>
   );

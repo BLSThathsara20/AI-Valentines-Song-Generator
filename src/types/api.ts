@@ -89,16 +89,18 @@ export interface TaskResponse {
   message: string;
 }
 
-export type GenerationHistoryItem = {
+export interface GenerationHistoryItem {
   id: string;
   prompt: string;
   status: 'pending' | 'completed' | 'failed';
   timestamp: number;
+  notificationSent?: boolean;
   completedAt?: number;
   songs?: Song[];
   error?: string;
+  error_response?: any;
   tags?: string;
-};
+}
 
 export type HistoryItemInput = Omit<GenerationHistoryItem, 'completedAt'> & {
   completedAt?: number;

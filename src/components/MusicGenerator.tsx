@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { TaskResponse, GenerationHistoryItem, Song } from '../types/api';
 import { LoadingWave } from './';
-import { generateValentineLyrics } from '../services/gemini';
-import { HeartIcon, SparklesIcon } from '@heroicons/react/24/outline';
+import { generateValentineLyrics } from '../services/openai';
+import { HeartIcon, SparklesIcon, EnvelopeIcon, ShareIcon } from '@heroicons/react/24/outline';
 import { getErrorMessage } from '../utils/errorHandling';
 import { logError } from './ErrorLoggerProvider';
 import { InfoModal } from './InfoModal';
@@ -15,9 +15,17 @@ import { ProcessingStatus } from './ProcessingStatus';
 import { StickyPlayer } from './StickyPlayer';
 import { playSuccessSound } from '../utils/audio';
 import { ShareSongEmail } from './ShareSongEmail';
+import { ErrorDetailsModal } from './ErrorDetailsModal';
+import { SongStatusEmailModal } from './SongStatusEmailModal';
+import emailjs from '@emailjs/browser';
+import { WhatsAppShareModal } from './WhatsAppShareModal';
+import { GenerationLoadingModal } from './GenerationLoadingModal';
+import { SongStatusNotifier } from './SongStatusNotifier';
 
 const API_KEY = import.meta.env.VITE_SUNO_API_KEY;
 const HISTORY_KEY = 'music_generation_history';
+const EMAIL_STORAGE_KEY = 'valentine_notification_email';
+const TASKS_STORAGE_KEY = 'valentine_tasks_status';
 
 console.log('API Key loaded:', API_KEY ? 'Yes' : 'No');
 
@@ -66,6 +74,7 @@ const PROMPT_TYPES = [
 const MIN_LYRICS_CHARS = 25;
 const MAX_LYRICS_CHARS = 900;
 const MAX_HISTORY_ITEMS = 5;
+const MAX_SONGS_LIMIT = 6;
 
 // Move type definition outside (this is fine)
 type PreviewData = {
@@ -161,9 +170,9 @@ function GenerationTime({ startTime, endTime }: { startTime: number; endTime?: n
     <span className="text-xs text-gray-500 flex items-center gap-1">
       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
+          </svg>
       Generated in {minutes}:{seconds.toString().padStart(2, '0')}
-    </span>
+        </span>
   );
 }
 
@@ -280,6 +289,93 @@ const BASE_URL = window.location.hostname === 'localhost'
   ? '/' 
   : '/lyrics-to-song/';
 
+// Add this type
+type TaskStatus = {
+  id: string;
+  status: 'pending' | 'completed' | 'failed';
+  notificationSent?: boolean;
+};
+
+// Add this helper function to manage task status updates
+const updateTaskStatus = (taskId: string, updates: Partial<TaskStatus>) => {
+  const savedTasks = JSON.parse(localStorage.getItem(TASKS_STORAGE_KEY) || '[]');
+  const updatedTasks = savedTasks.map((task: TaskStatus) => 
+    task.id === taskId 
+      ? { ...task, ...updates }
+      : task
+  );
+  localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
+  setTaskStatuses(updatedTasks);
+  console.log('Updated task status:', { taskId, updates, currentTasks: updatedTasks });
+};
+
+// Update the history item type to include notification status
+type GenerationHistoryItem = {
+  id: string;
+  prompt: string;
+  status: 'pending' | 'completed' | 'failed';
+  timestamp: number;
+  notificationSent?: boolean;
+  completedAt?: number;
+  error?: string;
+  songs?: any[];
+};
+
+// Add this function to handle manual notification sending
+const sendCompletionNotification = async (songId: string) => {
+  const song = history.find(item => item.id === songId);
+  const storedEmail = localStorage.getItem(EMAIL_STORAGE_KEY);
+  
+  if (!song || !storedEmail) return;
+
+  try {
+    console.log('Manually sending completion notification for song:', {
+      songId,
+      email: storedEmail,
+      title: song.songs?.[0]?.title
+    });
+
+    const emailData = {
+      to_email: storedEmail,
+      user_name: "Music Lover",
+      message: "Here's your Valentine's song!",
+      title: song.title || 'Your Valentine Song',
+      status: 'completed',
+      url: song.url || ''
+    };
+
+    const emailResult = await emailjs.send(
+      import.meta.env.VITE_EMAILJS_SERVICE_ID,
+      import.meta.env.VITE_EMAILJS_SONG_STATUS_TEMPLATE_ID,
+      emailData,
+      import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+    );
+
+    if (emailResult.status === 200) {
+      // Update history to mark notification as sent
+      const updatedHistory = history.map(item => 
+        item.id === songId 
+          ? { ...item, notificationSent: true }
+          : item
+      );
+      updateHistory(updatedHistory);
+      
+      setNotification({
+        type: 'success',
+        message: 'Notification email sent successfully! 📧',
+        duration: 3000
+      });
+    }
+  } catch (error) {
+    console.error('Failed to send notification:', error);
+    setNotification({
+      type: 'error',
+      message: 'Failed to send notification email. Please try again.',
+      duration: 3000
+    });
+  }
+};
+
 export default function MusicGenerator() {
   const [previewData, setPreviewData] = useState<PreviewData>({ isOpen: false });
   const [prompt, setPrompt] = useState('');
@@ -311,6 +407,23 @@ export default function MusicGenerator() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [showEmailShare, setShowEmailShare] = useState(false);
   const [shareableSong, setShareableSong] = useState<{title: string; url: string} | null>(null);
+  const [errorModalDetails, setErrorModalDetails] = useState<{
+    isOpen: boolean;
+    details: any;
+  }>({
+    isOpen: false,
+    details: null
+  });
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [currentSongDetails, setCurrentSongDetails] = useState<{
+    prompt: string;
+    status: string;
+  } | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [showWhatsAppShare, setShowWhatsAppShare] = useState(false);
+
+  // Add this computed value
+  const hasReachedLimit = history.length >= MAX_SONGS_LIMIT;
 
   // Add this effect at the top of your component, right after the state declarations
   useEffect(() => {
@@ -391,7 +504,7 @@ export default function MusicGenerator() {
         history.map(async (item) => {
           if (item.status === 'pending') {
             try {
-              const taskDetails = await fetchTaskDetails(item.id);
+            const taskDetails = await fetchTaskDetails(item.id);
               if (!taskDetails) return item;
 
               const status = taskDetails.data.status;
@@ -413,13 +526,13 @@ export default function MusicGenerator() {
                   });
                 }
 
-                return {
-                  ...item,
+              return {
+                ...item,
                   status: status,
                   songs: status === 'completed' ? songs : undefined,
                   error: status === 'failed' ? taskDetails.data.error?.message : undefined,
                   completedAt: Date.now()
-                };
+              };
               } else {
                 newProcessingTasks.add(item.id); // Add to processing tasks
               }
@@ -532,15 +645,98 @@ export default function MusicGenerator() {
               });
               setShowEmailShare(true);
             }}
+            onShareWhatsApp={() => {
+              setShareableSong({
+                title: song.title,
+                url: songUrl
+              });
+              setShowWhatsAppShare(true);
+            }}
+            onTestEmail={() => {
+              const storedEmail = localStorage.getItem(EMAIL_STORAGE_KEY);
+              if (!storedEmail) {
+                setNotification({
+                  type: 'error',
+                  message: 'Please set your email first',
+                  duration: 3000
+                });
+                return;
+              }
+
+              // Use SONG_STATUS_TEMPLATE_ID instead of TEMPLATE_ID
+              const emailData = {
+                to_email: storedEmail,
+                user_name: "Music Lover",
+                message: "Here's your Valentine's song!",
+                title: song.title || 'Your Valentine Song',
+                status: 'completed',
+                url: song.url || ''
+              };
+
+              console.log('Sending email with data:', emailData);
+
+              emailjs.send(
+                import.meta.env.VITE_EMAILJS_SERVICE_ID,
+                import.meta.env.VITE_EMAILJS_SONG_STATUS_TEMPLATE_ID, // Changed to use song status template
+                emailData,
+                import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+              )
+              .then((response) => {
+                console.log('Email sent successfully:', response);
+                setNotification({
+                  type: 'success',
+                  message: 'Test email sent! 📧',
+                  duration: 3000
+                });
+              })
+              .catch((error) => {
+                console.error('Failed to send test email:', error);
+                console.error('Template ID:', import.meta.env.VITE_EMAILJS_SONG_STATUS_TEMPLATE_ID);
+                console.error('Service ID:', import.meta.env.VITE_EMAILJS_SERVICE_ID);
+                setNotification({
+                  type: 'error',
+                  message: 'Failed to send email',
+                  duration: 3000
+                });
+              });
+            }}
           />
         </div>
       );
     };
   }, [setCurrentSong, setIsPlaying]);
 
+  // Add new state for tracking tasks
+  const [taskStatuses, setTaskStatuses] = useState<TaskStatus[]>(() => {
+    const saved = localStorage.getItem(TASKS_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Save task statuses to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(taskStatuses));
+  }, [taskStatuses]);
+
+  // Update generateMusic to save initial task status
   const generateMusic = async () => {
-    if (!API_KEY) {
+    if (hasReachedLimit) {
       setNotification({
+        type: 'warning',
+        message: 'You have reached the maximum limit of 6 songs. Please delete some songs to generate more.'
+      });
+      return;
+    }
+
+    if (!prompt.trim()) {
+      setNotification({
+        type: 'error',
+        message: 'Please enter lyrics before generating a song'
+      });
+      return;
+    }
+
+    if (!API_KEY) {
+    setNotification({
         type: 'error',
         message: 'API key is missing. Please check your configuration.',
         duration: 5000
@@ -581,13 +777,14 @@ export default function MusicGenerator() {
     };
 
     try {
-      setIsLoading(true);
+    setIsGenerating(true); // Set generating flag
+    setIsLoading(true);
       const startTime = Date.now();
 
       const response = await axios.post('https://api.piapi.ai/api/v1/task', requestData, {
-        headers: {
+              headers: {
           'Authorization': `Bearer ${API_KEY}`,
-          'X-API-Key': API_KEY,
+                'X-API-Key': API_KEY,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         }
@@ -596,13 +793,14 @@ export default function MusicGenerator() {
       const newTaskId = response.data.data.task_id;
       setTaskId(newTaskId);
       setProcessingTasks(prev => new Set(prev).add(newTaskId)); // Add to processing tasks
-
+      
       // Add to history immediately
-      const historyItem: HistoryItemInput = {
+      const historyItem: GenerationHistoryItem = {
         id: newTaskId,
         prompt: prompt,
         status: 'pending',
         timestamp: startTime,
+        notificationSent: false,
         tags: `${selectedOptions.voiceType}, ${selectedOptions.genre}, ${selectedOptions.mood}, ${selectedOptions.era}`
       };
 
@@ -615,8 +813,29 @@ export default function MusicGenerator() {
         duration: 5000
       });
 
+      setShowEmailModal(true);
+      setCurrentSongDetails({
+        prompt: prompt,
+        status: 'pending'
+      });
+
       setIsLoading(false);
+
+      // Initialize new task in storage
+      const savedTasks = JSON.parse(localStorage.getItem(TASKS_STORAGE_KEY) || '[]');
+      const newTask = {
+        id: newTaskId,
+        status: 'pending',
+        notificationSent: false,
+        createdAt: new Date().toISOString()
+      };
+      
+      const updatedTasks = [...savedTasks, newTask];
+      localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
+      setTaskStatuses(updatedTasks);
+      console.log('Created new task:', newTask);
     } catch (error) {
+      setIsGenerating(false); // Clear flag on error
       setIsLoading(false);
       setProcessingTasks(prev => {
         const newSet = new Set(prev);
@@ -698,10 +917,10 @@ export default function MusicGenerator() {
       setSelectedOptions(prev => ({ ...prev, [field]: value }));
     } catch (error) {
       console.error(`Error updating ${field}:`, error);
-      setNotification({
-        type: 'error',
+    setNotification({
+      type: 'error',
         message: 'Failed to update selection. Please try again.'
-      });
+    });
     }
   };
 
@@ -788,7 +1007,7 @@ export default function MusicGenerator() {
     const icons: { [key: string]: string } = {
       '1970s': '🕰️',
       '1980s': '🎸',
-      '1990s': '💿',
+      '1990s': '��',
       '2000s': '📀',
       '2010s': '🎧',
       'modern': '✨'
@@ -830,12 +1049,19 @@ export default function MusicGenerator() {
 
   // Add updateHistoryItem function
   const updateHistoryItem = (id: string, updates: Partial<GenerationHistoryItem>) => {
-    const newHistory = history.map(item => 
-      item.id === id 
-        ? { ...item, ...updates }
-        : item
-    );
-    updateHistory(newHistory);
+    setHistory(prevHistory => {
+      return prevHistory.map(item => {
+        if (item.id === id) {
+          // Ensure we preserve the songs array when updating
+          return {
+            ...item,
+            ...updates,
+            songs: updates.songs || item.songs // Keep existing songs if not being updated
+          };
+        }
+        return item;
+      });
+    });
   };
 
   // Add audio management
@@ -862,6 +1088,186 @@ export default function MusicGenerator() {
     setIsPlaying(true);
   };
 
+  // Update the checkTaskStatus function to handle notification based on history
+  const checkTaskStatus = async (taskId: string) => {
+    try {
+      const response = await fetchTaskDetails(taskId);
+      console.log('Checking task status:', { taskId, response, status: response?.status });
+
+      if (response?.status === 'completed' && response?.output?.songs?.length > 0) {
+        setIsGenerating(false);
+        const songUrl = response.output.songs[0].url;
+        const songTitle = `Valentine's Song #${history.length + 1}`;
+
+        // Update history with completed status
+        const updatedHistory = history.map(item => 
+          item.id === taskId 
+            ? { 
+                ...item, 
+                status: 'completed',
+                completedAt: Date.now(),
+                songs: response.output.songs,
+                notificationSent: false
+              }
+            : item
+        );
+        updateHistory(updatedHistory);
+
+        // Get the completed task
+        const completedTask = updatedHistory.find(item => item.id === taskId);
+        const storedEmail = localStorage.getItem(EMAIL_STORAGE_KEY);
+
+        if (storedEmail && completedTask) {
+          try {
+            console.log('Sending completion notification for task:', {
+              taskId,
+              email: storedEmail,
+              songTitle,
+              songUrl
+            });
+
+            // Ensure all required fields are present and properly formatted
+            const emailData = {
+              to_email: storedEmail,
+              user_name: "Music Lover",
+              message: "Here's your Valentine's song!",
+              title: songTitle,
+              status: 'completed',
+              url: songUrl
+            };
+
+            console.log('Sending email with data:', emailData);
+
+            const emailResult = await emailjs.send(
+              import.meta.env.VITE_EMAILJS_SERVICE_ID,
+              import.meta.env.VITE_EMAILJS_SONG_STATUS_TEMPLATE_ID,
+              emailData,
+              import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+            );
+
+            console.log('Email notification response:', emailResult);
+
+            if (emailResult.status === 200) {
+              // Update history to mark notification as sent
+              const historyWithNotification = updatedHistory.map(item => 
+                item.id === taskId 
+                  ? { ...item, notificationSent: true }
+                  : item
+              );
+              updateHistory(historyWithNotification);
+              
+              console.log('Updated history with notification status:', {
+                taskId,
+                notificationSent: true
+              });
+            }
+          } catch (error) {
+            console.error('Failed to send notification:', error);
+          }
+        }
+
+        // Update UI
+        playSuccessSound();
+        setCurrentSong({ url: songUrl, title: songTitle });
+        setNotification({
+          type: 'success',
+          message: 'Your Valentine\'s song is ready! 🎵',
+          duration: 5000
+        });
+
+        // Remove from processing tasks
+        const newProcessingTasks = new Set(processingTasks);
+        newProcessingTasks.delete(taskId);
+        setProcessingTasks(newProcessingTasks);
+      }
+    } catch (error) {
+      console.error('Error checking task status:', error);
+    }
+  };
+
+  // Update the polling effect to log its activity
+  useEffect(() => {
+    if (processingTasks.size > 0) {
+      console.log('Setting up polling for tasks:', Array.from(processingTasks));
+      const interval = setInterval(() => {
+        console.log('Polling tasks:', Array.from(processingTasks));
+        processingTasks.forEach(taskId => {
+          checkTaskStatus(taskId);
+        });
+      }, 5000); // Check every 5 seconds
+
+      return () => {
+        console.log('Cleaning up task polling');
+        clearInterval(interval);
+      };
+    }
+  }, [processingTasks]);
+
+  // Add this effect to handle page leave warning
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isGenerating || processingTasks.size > 0) {
+        e.preventDefault();
+        e.returnValue = 'Song generation in progress. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isGenerating, processingTasks]);
+
+  // Update the playSuccessSound function to handle notification
+  const playSuccessSound = async () => {
+    if (audioContext) {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 800;
+      gainNode.gain.value = 0.1;
+      
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.2);
+
+      // Send email notification when success sound plays
+      const storedEmail = localStorage.getItem(EMAIL_STORAGE_KEY);
+      if (storedEmail && currentSongDetails) {
+        try {
+          console.log('Sending completion notification on success sound');
+          const emailResult = await emailjs.send(
+            import.meta.env.VITE_EMAILJS_SERVICE_ID,
+            import.meta.env.VITE_EMAILJS_SONG_STATUS_TEMPLATE_ID,
+            {
+              to_email: storedEmail,
+              user_name: "Music Lover",
+              message: "Here's your Valentine's song!",
+              title: currentSongDetails.title,
+              status: 'completed',
+              url: currentSongDetails.url
+            },
+            import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+          );
+
+          console.log('✅ Completion notification sent on success:', emailResult);
+
+          // Update history to mark notification as sent
+          const updatedHistory = history.map(item => 
+            item.id === taskId 
+              ? { ...item, notificationSent: true }
+              : item
+          );
+          updateHistory(updatedHistory);
+        } catch (error) {
+          console.error('Failed to send completion notification:', error);
+        }
+      }
+    }
+  };
+
   return (
     <>
       <ProcessingStatus processingCount={processingTasks.size} />
@@ -877,12 +1283,12 @@ export default function MusicGenerator() {
           
           {!showCaptcha && (
             <div className="min-h-screen py-4 px-2 md:py-8 md:px-4">
-              <NotificationComponent 
-                notification={notification} 
-                onClose={() => setNotification(null)} 
-              />
-              
-              <div className="max-w-2xl mx-auto w-full">
+        <NotificationComponent 
+          notification={notification} 
+          onClose={() => setNotification(null)} 
+        />
+        
+        <div className="max-w-2xl mx-auto w-full">
                 <div className="text-center mb-6 md:mb-8 relative">
                   <button
                     onClick={() => setShowInfoModal(true)}
@@ -893,16 +1299,16 @@ export default function MusicGenerator() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </button>
-                  <h1 className="text-3xl md:text-4xl font-bold text-red-600 mb-2 flex items-center justify-center gap-2">
-                    <HeartIcon className="w-6 h-6 md:w-8 md:h-8" />
+            <h1 className="text-3xl md:text-4xl font-bold text-red-600 mb-2 flex items-center justify-center gap-2">
+              <HeartIcon className="w-6 h-6 md:w-8 md:h-8" />
                     <span className="hidden md:inline">Valentine's Song Generator</span>
-                    <span className="md:hidden">Love Song Maker</span>
-                    <HeartIcon className="w-6 h-6 md:w-8 md:h-8" />
-                  </h1>
-                  <p className="text-sm md:text-base text-gray-600">Create your perfect Valentine's Day song</p>
-                </div>
+              <span className="md:hidden">Love Song Maker</span>
+              <HeartIcon className="w-6 h-6 md:w-8 md:h-8" />
+            </h1>
+            <p className="text-sm md:text-base text-gray-600">Create your perfect Valentine's Day song</p>
+          </div>
 
-                <div className="bg-white rounded-xl shadow-xl p-4 md:p-6 mb-4 md:mb-6">
+          <div className="bg-white rounded-xl shadow-xl p-4 md:p-6 mb-4 md:mb-6">
                   {/* Step 1: Music Style */}
                   <div className="mb-8">
                     <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -999,11 +1405,11 @@ export default function MusicGenerator() {
                   </div>
 
                   {/* Step 2: Lyrics (Optional) */}
-                  <div className="mb-6">
-                    <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <SparklesIcon className="w-5 h-5 text-pink-500" />
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <SparklesIcon className="w-5 h-5 text-pink-500" />
                       Step 2: Song Lyrics
-                    </h2>
+              </h2>
 
                     {/* Main Lyrics Input */}
                     <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 space-y-6">
@@ -1036,14 +1442,14 @@ export default function MusicGenerator() {
 
                       {/* AI Generation Section */}
                       {showLyricsInput && (
-                        <div className="space-y-4">
+              <div className="space-y-4">
                           {/* Style Pills instead of dropdown */}
-                          <div>
+                <div>
                             <label className="block text-sm font-medium text-gray-700 mb-3">
                               Choose Your Style
-                            </label>
+                  </label>
                             <div className="flex flex-wrap gap-2">
-                              {PROMPT_TYPES.map(type => (
+                    {PROMPT_TYPES.map(type => (
                                 <button
                                   key={type.value}
                                   onClick={() => setPromptType(type.value as typeof promptType)}
@@ -1053,25 +1459,25 @@ export default function MusicGenerator() {
                                       : 'bg-white text-gray-600 hover:bg-pink-50 hover:text-pink-500 border border-gray-200'
                                   }`}
                                 >
-                                  {type.label}
+                        {type.label}
                                 </button>
-                              ))}
+                    ))}
                             </div>
-                          </div>
-
+                </div>
+                
                           {/* Lyrics Idea Input */}
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                               Describe Your Song
-                              <span className="text-xs text-gray-500 ml-2">
+                    <span className="text-xs text-gray-500 ml-2">
                                 ({MIN_LYRICS_CHARS}-{MAX_LYRICS_CHARS} characters)
-                              </span>
-                            </label>
+                    </span>
+                  </label>
                             <div className="relative">
-                              <textarea
+                  <textarea
                                 className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent min-h-[120px] shadow-sm"
                                 placeholder="What's your love story? Describe the feelings, moments, or memories you want to capture in your song..."
-                                value={lyricsIdea}
+                    value={lyricsIdea}
                                 onChange={(e) => handleLyricsChange(e.target.value)}
                                 maxLength={MAX_LYRICS_CHARS}
                               />
@@ -1079,26 +1485,26 @@ export default function MusicGenerator() {
                                 <span>{lyricsIdea.length}/{MAX_LYRICS_CHARS}</span>
                               </div>
                             </div>
-                          </div>
-
+                </div>
+                
                           {/* Generate Button */}
-                          <button
-                            onClick={generateLyrics}
-                            disabled={isGeneratingLyrics || lyricsIdea.length < MIN_LYRICS_CHARS}
+                  <button
+                    onClick={generateLyrics}
+                    disabled={isGeneratingLyrics || lyricsIdea.length < MIN_LYRICS_CHARS}
                             className="w-full bg-gradient-to-r from-pink-500 to-red-500 text-white px-6 py-3 rounded-xl hover:from-pink-600 hover:to-red-600 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2 shadow-md"
-                          >
-                            {isGeneratingLyrics ? (
-                              <>
-                                <LoadingWave />
+                  >
+                    {isGeneratingLyrics ? (
+                      <>
+                        <LoadingWave />
                                 <span>Creating Your Lyrics...</span>
-                              </>
-                            ) : (
-                              <>
-                                <SparklesIcon className="w-5 h-5" />
+                      </>
+                    ) : (
+                      <>
+                        <SparklesIcon className="w-5 h-5" />
                                 Generate with AI
-                              </>
-                            )}
-                          </button>
+                      </>
+                    )}
+                  </button>
                         </div>
                       )}
 
@@ -1128,56 +1534,59 @@ export default function MusicGenerator() {
                         <div className="mt-1 text-xs text-gray-500 text-right">
                           {prompt.length}/{MAX_LYRICS_CHARS} characters
                         </div>
-                      </div>
-                    </div>
-                  </div>
+                </div>
+              </div>
+            </div>
 
                   {/* Step 3: Generate Button */}
-                  <div className="mb-6">
-                    <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <HeartIcon className="w-5 h-5 text-pink-500" />
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <HeartIcon className="w-5 h-5 text-pink-500" />
                       Step 3: Create Your Song
-                    </h2>
+              </h2>
 
                     <div className="flex gap-2">
-                      <button
-                        className="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                        onClick={generateMusic}
-                        disabled={isLoading || processingTasks.size > 0}
-                      >
-                        {isLoading ? (
-                          <span className="flex items-center gap-2">
-                            <LoadingWave />
-                            Creating Your Song...
-                          </span>
-                        ) : processingTasks.size > 0 ? (
-                          <>
-                            <LoadingWave />
-                            Please wait for current song...
-                          </>
-                        ) : (
-                          <>
-                            <HeartIcon className="w-5 h-5" />
-                            Create Valentine's Song
-                          </>
-                        )}
-                      </button>
-                      
-                      <button
-                        onClick={handlePreviewClick}
-                        className="px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                        title="Preview Request/Response"
-                      >
+                    <button
+                  onClick={generateMusic}
+                  disabled={isLoading || processingTasks.size > 0 || !prompt.trim() || hasReachedLimit}
+                  className="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 
+                    disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors 
+                    flex items-center justify-center gap-2"
+                  title={hasReachedLimit ? 'Maximum song limit reached' : ''}
+                >
+                  {isLoading ? (
+                    <span className="flex items-center gap-2">
+                      <LoadingWave />
+                      Creating Your Song...
+                    </span>
+                  ) : processingTasks.size > 0 ? (
+                    <>
+                      <LoadingWave />
+                      Please wait for current song...
+                    </>
+                  ) : (
+                    <>
+                      <HeartIcon className="w-5 h-5" />
+                      Create Valentine's Song
+                    </>
+                  )}
+                </button>
+                
+                <button
+                  onClick={handlePreviewClick}
+                  className="px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="Preview Request/Response"
+                >
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
 
-                {/* History Section */}
-                {history.length > 0 && (
+          {/* History Section */}
+          {history.length > 0 && (
                   <div className="mt-8">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
@@ -1187,28 +1596,28 @@ export default function MusicGenerator() {
                         </h3>
                         <span className="px-2 py-1 bg-pink-100 text-pink-600 rounded-full text-sm">
                           {history.length}/{MAX_HISTORY_ITEMS} Songs
-                        </span>
-                      </div>
+                    </span>
+                  </div>
                       {history.length > 1 && (
-                        <button
+                <button
                           onClick={() => {
                             if (window.confirm('Are you sure you want to clear all history?')) {
                               clearHistory();
                             }
                           }}
                           className="flex items-center gap-1 px-3 py-1.5 text-pink-600 hover:text-pink-700 hover:bg-pink-50 rounded-full transition-colors text-sm font-medium"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
                           Clear All
-                        </button>
+                </button>
                       )}
-                    </div>
+              </div>
                     <div className="space-y-4">
-                      {history.map((item, index) => (
-                        <div
-                          key={item.id}
+                {history.map((item, index) => (
+                  <div
+                    key={item.id}
                           className="relative bg-white rounded-xl shadow-md border border-pink-100 overflow-hidden group hover:shadow-lg transition-shadow duration-300"
                         >
                           {/* Valentine's themed status bar */}
@@ -1228,7 +1637,7 @@ export default function MusicGenerator() {
                                 #{history.length - index}
                               </span>
                             </div>
-                          </div>
+                    </div>
 
                           <div className="p-4 pt-6">
                             <div className="flex items-start justify-between">
@@ -1248,35 +1657,35 @@ export default function MusicGenerator() {
                                      item.status === 'failed' ? '❌ Failed' : 
                                      '✨ Creating Magic...'}
                                   </span>
-                                  <span className="text-xs text-gray-500">
-                                    {new Date(item.timestamp).toLocaleString()}
-                                  </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(item.timestamp).toLocaleString()}
+                            </span>
                                   {/* Only show duration for completed items with both timestamps */}
                                   {item.status === 'completed' && item.timestamp && item.completedAt && (
-                                    <GenerationTime 
-                                      startTime={item.timestamp}
-                                      endTime={item.completedAt}
-                                    />
-                                  )}
-                                </div>
-                              </div>
-                              <button
+                              <GenerationTime 
+                                startTime={item.timestamp}
+                                endTime={item.completedAt}
+                              />
+                            )}
+                          </div>
+                        </div>
+                        <button
                                 onClick={() => removeFromHistory(item.id)}
                                 className="text-gray-400 hover:text-red-500 transition-colors"
                                 title="Remove from history"
                               >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                              </button>
-                            </div>
+                          </svg>
+                        </button>
+                    </div>
 
-                            {item.songs && item.songs.length > 0 && (
-                              <div className="space-y-3 mt-3">
-                                {item.songs.map((song) => (
+                    {item.songs && item.songs.length > 0 && (
+                      <div className="space-y-3 mt-3">
+                        {item.songs.map((song) => (
                                   <SongDisplay key={song.id} song={song} />
-                                ))}
-                              </div>
+                                  ))}
+                                </div>
                             )}
 
                             {item.status === 'pending' && !item.songs?.length && (
@@ -1289,39 +1698,169 @@ export default function MusicGenerator() {
                             )}
 
                             {item.status === 'failed' && item.error && (
-                              <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
-                                <p className="text-sm text-red-700">{item.error}</p>
-                                {item.error.includes('credit') && (
-                                  <a 
-                                    href="https://piapi.ai/account"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-sm text-red-600 hover:text-red-800 underline mt-1 inline-block"
+                              <div className="mt-3 p-4 bg-red-50 rounded-lg border border-red-200">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm text-red-700">{item.error}</p>
+                              <button
+                                onClick={() => {
+                                        // Debug logs
+                                        console.log('Full item:', item);
+                                        console.log('Error response:', item.error_response);
+                                        
+                                        // Get error details from the complete response
+                                        const errorSong = item.error_response?.data?.output?.songs?.[0];
+                                        const apiError = item.error_response?.data?.error;
+                                        
+                                        console.log('Error Song:', errorSong); // Debug log
+                                        
+                                        setErrorModalDetails({
+                                          isOpen: true,
+                                          details: {
+                                            error_type: errorSong?.error_type || 'Unknown Error',
+                                            error_code: errorSong?.error_code,
+                                            error_detail: errorSong?.error_detail,
+                                            message: item.error,
+                                            raw_message: JSON.stringify({
+                                              song_error: errorSong || null,
+                                              api_error: apiError || null
+                                            }, null, 2)
+                                          }
+                                        });
+                                      }}
+                                      className="p-1 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-full transition-colors"
+                                      title="View Error Details"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                            </div>
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        // Update current item to pending status
+                                        updateHistoryItem(item.id, { 
+                                          status: 'pending',
+                                          error: undefined,
+                                          error_response: undefined,
+                                          timestamp: Date.now()
+                                        });
+
+                                        // Remove from processing tasks if present
+                                        setProcessingTasks(prev => {
+                                          const newSet = new Set(prev);
+                                          newSet.delete(item.id);
+                                          return newSet;
+                                        });
+
+                                        // Add to processing tasks
+                                        setProcessingTasks(prev => new Set(prev).add(item.id));
+
+                                        // Call API with same parameters
+                                        const response = await axios.post(
+                                          'https://api.piapi.ai/api/v1/task',
+                                          {
+                                            model: 'music-u',
+                                            task_type: 'generate_music',
+                                            input: {
+                                              prompt: item.prompt,
+                                              lyrics_type: 'user',
+                                              make_instrumental: false,
+                                              tags: 'male_vocals,male_voice,male_singer',
+                                              negative_tags: 'female_vocals,female_voice,female_singer'
+                                            }
+                                          },
+                                          {
+                                            headers: {
+                                              'Authorization': `Bearer ${API_KEY}`,
+                                              'X-API-Key': API_KEY,
+                                              'Accept': 'application/json'
+                                            }
+                                          }
+                                        );
+
+                                        // Update task ID
+                                        const taskId = response.data.task_id;
+                                        updateHistoryItem(item.id, { taskId });
+
+                                      } catch (error) {
+                                        // If API call fails, update status back to failed
+                                        updateHistoryItem(item.id, {
+                                          status: 'failed',
+                                          error: getErrorMessage(error),
+                                          timestamp: Date.now()
+                                        });
+                                        setProcessingTasks(prev => {
+                                          const newSet = new Set(prev);
+                                          newSet.delete(item.id);
+                                          return newSet;
+                                        });
+                                      }
+                                    }}
+                                    className="ml-3 flex items-center gap-1 px-3 py-1.5 bg-red-100 hover:bg-red-200 
+                                      text-red-700 rounded-lg transition-colors"
+                                    title="Retry generation"
                                   >
-                                    Check Account Balance →
-                                  </a>
-                                )}
-                              </div>
-                            )}
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    <span className="text-sm font-medium">Retry</span>
+                                  </button>
+                                </div>
+                        {item.error.includes('credit') && (
+                          <a 
+                            href="https://piapi.ai/account"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                                    className="text-sm text-red-600 hover:text-red-800 underline mt-2 inline-block"
+                          >
+                            Check Account Balance →
+                          </a>
+                        )}
+                      </div>
+                    )}
                           </div>
-                        </div>
-                      ))}
-                    </div>
                   </div>
-                )}
+                ))}
               </div>
-              
-              <PreviewModal
-                isOpen={previewData.isOpen}
-                onClose={() => setPreviewData({ isOpen: false })}
-                request={previewData.request}
-                response={previewData.response}
-              />
+            </div>
+          )}
+        </div>
+        
+        <PreviewModal
+          isOpen={previewData.isOpen}
+          onClose={() => setPreviewData({ isOpen: false })}
+          request={previewData.request}
+          response={previewData.response}
+        />
               <InfoModal 
                 isOpen={showInfoModal}
                 onClose={() => setShowInfoModal(false)}
               />
-            </div>
+              <ErrorDetailsModal
+                isOpen={errorModalDetails.isOpen}
+                onClose={() => setErrorModalDetails({ isOpen: false, details: null })}
+                errorDetails={errorModalDetails.details || {}}
+        />
+              <SongStatusEmailModal
+                isOpen={showEmailModal}
+                onClose={() => setShowEmailModal(false)}
+                songDetails={currentSongDetails || { prompt: '', status: '' }}
+        />
+              <WhatsAppShareModal 
+                isOpen={showWhatsAppShare}
+                onClose={() => setShowWhatsAppShare(false)}
+                songTitle={currentSong?.title || ''}
+                songUrl={currentSong?.url || ''}
+              />
+              <GenerationLoadingModal 
+                isOpen={isGenerating} 
+                onClose={() => setIsGenerating(false)}
+        />
+      </div>
           )}
         </>
       )}

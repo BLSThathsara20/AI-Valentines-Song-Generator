@@ -14,6 +14,7 @@ export default {
 				"fade-in-delay": "fade-in 0.5s ease-out 0.2s forwards",
 				"fade-in-delay-2": "fade-in 0.5s ease-out 0.4s forwards",
 				success: "success 0.3s ease-out forwards",
+				"float-heart": "floatHeart 30s cubic-bezier(0.4, 0, 0.6, 1) infinite",
 			},
 			keyframes: {
 				"gradient-x": {
@@ -102,6 +103,50 @@ export default {
 					"100%": {
 						transform: "scale(1) rotate(0deg)",
 					},
+				},
+				floatHeart: {
+					"0%": {
+						transform: "translateY(120vh) translateX(-20px) scale(0)",
+						opacity: "0",
+					},
+					"5%": {
+						transform: "translateY(100vh) translateX(0) scale(0.2)",
+						opacity: "0.1",
+					},
+					"15%": {
+						transform: "translateY(80vh) translateX(20px) scale(0.5)",
+						opacity: "0.3",
+					},
+					"30%": {
+						transform: "translateY(60vh) translateX(-10px) scale(1)",
+						opacity: "0.2",
+					},
+					"50%": {
+						transform: "translateY(40vh) translateX(10px) scale(0.8)",
+						opacity: "0.15",
+					},
+					"70%": {
+						transform: "translateY(20vh) translateX(-5px) scale(0.4)",
+						opacity: "0.1",
+					},
+					"85%": {
+						transform: "translateY(10vh) translateX(0) scale(0.2)",
+						opacity: "0.05",
+					},
+					"95%": {
+						transform: "translateY(5vh) translateX(0) scale(0.1)",
+						opacity: "0.02",
+					},
+					"100%": {
+						transform: "translateY(-10vh) translateX(0) scale(0)",
+						opacity: "0",
+					},
+				},
+			},
+			colors: {
+				valentine: {
+					pink: "#FF69B4",
+					orange: "#FF8C69",
 				},
 			},
 		},

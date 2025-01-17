@@ -424,6 +424,90 @@ const checkAndSendNotifications = async () => {
   }
 };
 
+// Add FloatingHearts component at the top level
+const FloatingHearts = ({ show = false }) => {
+  if (!show) return null;
+  
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      {[...Array(20)].map((_, i) => (
+        <div
+          key={i}
+          className="absolute animate-float-heart"
+          style={{
+            left: `${Math.random() * 100}%`,
+            animationDelay: `${Math.random() * 15}s`,
+            animationDuration: `${20 + Math.random() * 15}s`,
+            opacity: Math.random() * 0.06 + 0.02 // Random opacity between 0.02 and 0.08
+          }}
+        >
+          <div className={`transform rotate-${Math.floor(Math.random() * 360)} text-pink-${Math.random() > 0.5 ? '400' : '500'}`}>
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              strokeWidth="1.5" 
+              stroke="currentColor" 
+              aria-hidden="true" 
+              className="w-6 h-6"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"
+              />
+            </svg>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Add BackgroundHearts component at the top level
+const BackgroundHearts = () => {
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      {[...Array(15)].map((_, i) => (
+        <div
+          key={i}
+          className="absolute animate-float-heart"
+          style={{
+            left: `${Math.random() * 100}%`,
+            animationDelay: `${Math.random() * 30}s`,
+            animationDuration: `${30 + Math.random() * 20}s`,
+            opacity: Math.random() * 0.03 + 0.01 // Very subtle opacity between 0.01 and 0.04
+          }}
+        >
+          <div 
+            className={`transform rotate-${Math.floor(Math.random() * 360)} transition-opacity duration-1000`}
+            style={{
+              color: Math.random() > 0.5 ? 'rgb(255, 105, 180)' : 'rgb(255, 140, 105)', // valentine-pink or valentine-orange
+              opacity: Math.random() * 0.5 + 0.3 // Color opacity between 0.3 and 0.8
+            }}
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              strokeWidth="1.5" 
+              stroke="currentColor" 
+              aria-hidden="true" 
+              className="w-8 h-8 transition-opacity duration-1000"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"
+              />
+            </svg>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export default function MusicGenerator() {
   const [previewData, setPreviewData] = useState<PreviewData>({ isOpen: false });
   const [prompt, setPrompt] = useState('');
@@ -468,6 +552,7 @@ export default function MusicGenerator() {
   } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showWhatsAppShare, setShowWhatsAppShare] = useState(false);
+  const [showHearts, setShowHearts] = useState(false);
 
   // Add this computed value
   const hasReachedLimit = history.length >= MAX_SONGS_LIMIT;
@@ -1392,6 +1477,13 @@ export default function MusicGenerator() {
     }
   };
 
+  // Update the captcha success handler
+  const handleCaptchaSuccess = () => {
+    setShowCaptcha(false);
+    setShowHearts(true);
+    setTimeout(() => setShowHearts(false), 8000); // Hide hearts after 8 seconds
+  };
+
   return (
     <>
       <ProcessingStatus processingCount={processingTasks.size} />
@@ -1400,19 +1492,21 @@ export default function MusicGenerator() {
         <MaintenanceMessage />
       ) : (
         <>
+          <BackgroundHearts />
+          <FloatingHearts show={showHearts} />
           <ValentineCaptcha
             isOpen={showCaptcha}
-            onSuccess={() => setShowCaptcha(false)}
+            onSuccess={handleCaptchaSuccess}
           />
           
           {!showCaptcha && (
-            <div className="min-h-screen py-4 px-2 md:py-8 md:px-4">
-        <NotificationComponent 
-          notification={notification} 
-          onClose={() => setNotification(null)} 
-        />
-        
-        <div className="max-w-2xl mx-auto w-full">
+            <div className="min-h-screen py-4 px-2 md:py-8 md:px-4 relative">
+              <NotificationComponent 
+                notification={notification} 
+                onClose={() => setNotification(null)} 
+              />
+              
+              <div className="max-w-2xl mx-auto w-full">
                 <div className="text-center mb-6 md:mb-8 relative">
                   <button
                     onClick={() => setShowInfoModal(true)}

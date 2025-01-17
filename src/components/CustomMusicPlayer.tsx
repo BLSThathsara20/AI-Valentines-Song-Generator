@@ -73,14 +73,6 @@ export function CustomMusicPlayer({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                const songData = {
-                  url: src,
-                  title: title || 'Love Song',
-                  sender: "A Valentine's Friend"
-                };
-                const encodedData = btoa(JSON.stringify(songData));
-                const playPageUrl = `${window.location.origin}/lyrics-to-song/#/play/${encodedData}`;
-                console.log('Generated play page URL:', playPageUrl);
                 onShareEmail();
               }}
               className="p-2 rounded-full text-gray-400 hover:text-pink-600 hover:bg-pink-50 transition-colors"
@@ -93,14 +85,6 @@ export function CustomMusicPlayer({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                const songData = {
-                  url: src,
-                  title: title || 'Love Song',
-                  sender: "A Valentine's Friend"
-                };
-                const encodedData = btoa(JSON.stringify(songData));
-                const playPageUrl = `${window.location.origin}/lyrics-to-song/#/play/${encodedData}`;
-                console.log('Generated WhatsApp share URL:', playPageUrl);
                 onShareWhatsApp();
               }}
               className="p-2 rounded-full text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"

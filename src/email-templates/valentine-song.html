@@ -6,217 +6,343 @@
 		<title>Your Valentine's Love Song</title>
 		<style>
 			/* Reset styles */
-			* {
+			body {
 				margin: 0;
 				padding: 0;
-				box-sizing: border-box;
-			}
-
-			/* Base styles */
-			body {
-				font-family: "Helvetica Neue", Arial, sans-serif;
-				line-height: 1.6;
-				color: #374151;
 				background-color: #fdf2f8;
+				font-family: Arial, sans-serif;
+				-webkit-font-smoothing: antialiased;
+				line-height: 1.6;
 			}
 
-			/* Container */
+			/* Table reset */
+			table {
+				border-spacing: 0;
+				border-collapse: collapse;
+				mso-table-lspace: 0pt;
+				mso-table-rspace: 0pt;
+			}
+
+			/* Main container */
 			.container {
+				width: 100%;
 				max-width: 600px;
 				margin: 0 auto;
-				padding: 40px 20px;
 				background-color: #ffffff;
-			}
-
-			/* Header */
-			.header {
-				text-align: center;
-				padding: 40px 20px;
-				background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
-				border-radius: 16px;
-				margin-bottom: 30px;
-				position: relative;
+				border-radius: 24px;
 				overflow: hidden;
+				box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 			}
 
-			/* Floating hearts decoration */
-			.floating-heart {
-				position: absolute;
-				font-size: 24px;
-				opacity: 0.5;
-				animation: float 20s ease-in-out infinite;
+			/* Header section */
+			.header {
+				background: #fdf2f8;
+				background: -webkit-linear-gradient(
+					135deg,
+					#fdf2f8 0%,
+					#fbcfe8 50%,
+					#f9a8d4 100%
+				);
+				background: linear-gradient(
+					135deg,
+					#fdf2f8 0%,
+					#fbcfe8 50%,
+					#f9a8d4 100%
+				);
+				padding: 40px 20px;
+				text-align: center;
+				border-bottom: 3px solid #f9a8d4;
 			}
 
-			@keyframes float {
-				0%,
-				100% {
-					transform: translateY(0) rotate(0deg);
-					opacity: 0.2;
-				}
-				50% {
-					transform: translateY(-20px) rotate(180deg);
-					opacity: 0.8;
-				}
+			/* Heart icon row */
+			.heart-row {
+				text-align: center;
+				font-size: 32px;
+				padding: 10px 0;
+				letter-spacing: 8px;
 			}
 
 			/* Title styles */
 			.title {
+				color: #be185d;
 				font-size: 32px;
-				color: #db2777;
-				margin-bottom: 20px;
 				font-weight: bold;
-				text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+				margin: 20px 0;
+				text-align: center;
+				text-shadow: 1px 1px 0 #ffffff;
+			}
+
+			/* Content section */
+			.content {
+				padding: 40px 30px;
+				background-color: #ffffff;
+				background-image: linear-gradient(
+						rgba(251, 207, 232, 0.1) 1px,
+						transparent 1px
+					),
+					linear-gradient(90deg, rgba(251, 207, 232, 0.1) 1px, transparent 1px);
+				background-size: 20px 20px;
 			}
 
 			/* Song card */
 			.song-card {
-				background: white;
+				background: linear-gradient(135deg, #fdf2f8 0%, #fbcfe8 100%);
+				border: 3px solid #f9a8d4;
 				border-radius: 16px;
-				padding: 30px;
+				padding: 40px 30px;
 				margin: 30px 0;
-				box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-					0 2px 4px -1px rgba(0, 0, 0, 0.06);
-				border: 1px solid #fce7f3;
 				text-align: center;
+				box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 			}
 
 			/* Play button */
 			.play-button {
 				display: inline-block;
-				padding: 16px 32px;
-				background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
-				color: white;
+				padding: 18px 36px;
+				background: linear-gradient(135deg, #ec4899 0%, #be185d 100%);
+				color: #ffffff;
 				text-decoration: none;
 				border-radius: 12px;
-				font-size: 18px;
 				font-weight: bold;
+				font-size: 20px;
 				margin: 20px 0;
-				box-shadow: 0 4px 6px -1px rgba(236, 72, 153, 0.3);
-				transition: transform 0.2s ease;
+				box-shadow: 0 4px 6px -1px rgba(190, 24, 93, 0.3);
+				border: 2px solid #ffffff;
 			}
 
-			.play-button:hover {
-				transform: translateY(-2px);
-				box-shadow: 0 6px 8px -1px rgba(236, 72, 153, 0.4);
-			}
-
-			/* Love note */
-			.love-note {
-				background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+			/* Message box */
+			.message-box {
+				background: linear-gradient(135deg, #fdf2f8 0%, #fbcfe8 100%);
 				border-radius: 16px;
 				padding: 30px;
 				margin: 30px 0;
+				box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+				border: 3px solid #f9a8d4;
 				position: relative;
 			}
 
-			.love-note::before {
-				content: '"';
+			.message-box::before {
+				content: "❝";
 				position: absolute;
-				top: 10px;
+				top: -15px;
 				left: 20px;
-				font-size: 60px;
-				color: #ec4899;
-				opacity: 0.2;
+				font-size: 48px;
+				color: #be185d;
+				background: #ffffff;
+				padding: 0 10px;
+				line-height: 1;
 			}
 
-			/* Message text */
-			.message {
-				font-size: 16px;
-				line-height: 1.8;
-				color: #4b5563;
-				margin: 20px 0;
+			/* Divider */
+			.divider {
+				height: 3px;
+				background: linear-gradient(90deg, transparent, #f9a8d4, transparent);
+				margin: 40px 0;
+				border: none;
 			}
 
 			/* Footer */
 			.footer {
+				background: linear-gradient(135deg, #fdf2f8 0%, #fbcfe8 100%);
+				padding: 30px;
 				text-align: center;
-				padding: 20px;
-				color: #6b7280;
-				font-size: 14px;
-				border-top: 1px solid #fce7f3;
-				margin-top: 40px;
+				color: #be185d;
+				border-radius: 16px;
+				margin: 20px;
+				border: 2px solid #f9a8d4;
 			}
 
-			/* Responsive design */
-			@media (max-width: 600px) {
+			/* Responsive styles */
+			@media screen and (max-width: 600px) {
 				.container {
-					padding: 20px 10px;
+					width: 100% !important;
+					border-radius: 0;
+				}
+
+				.content {
+					padding: 30px 20px !important;
 				}
 
 				.title {
-					font-size: 24px;
+					font-size: 28px !important;
 				}
 
 				.play-button {
-					padding: 12px 24px;
-					font-size: 16px;
+					padding: 15px 30px;
+					font-size: 18px;
 				}
 			}
 		</style>
 	</head>
 	<body>
-		<div class="container">
-			<div class="header">
-				<!-- Floating hearts -->
-				<div class="floating-heart" style="left: 10%; animation-delay: 0s">
-					💝
-				</div>
-				<div class="floating-heart" style="right: 15%; animation-delay: 2s">
-					💖
-				</div>
-				<div
-					class="floating-heart"
-					style="left: 20%; top: 60%; animation-delay: 4s"
-				>
-					💗
-				</div>
-				<div
-					class="floating-heart"
-					style="right: 25%; top: 70%; animation-delay: 6s"
-				>
-					💓
-				</div>
+		<table
+			class="container"
+			width="100%"
+			cellpadding="0"
+			cellspacing="0"
+			role="presentation"
+		>
+			<!-- Header -->
+			<tr>
+				<td class="header">
+					<table
+						width="100%"
+						cellpadding="0"
+						cellspacing="0"
+						role="presentation"
+					>
+						<tr>
+							<td class="heart-row">💖 💝 💗</td>
+						</tr>
+						<tr>
+							<td class="title">
+								✨ A Special Valentine's Song ✨<br />Created With Love For You
+							</td>
+						</tr>
+						<tr>
+							<td
+								style="
+									text-align: center;
+									color: #be185d;
+									font-size: 20px;
+									padding: 15px;
+									font-weight: bold;
+								"
+							>
+								From: {{from_name}} 💝
+							</td>
+						</tr>
+					</table>
+				</td>
+			</tr>
 
-				<h1 class="title">💝 A Special Valentine's Song Just For You 💝</h1>
-				<p style="color: #be185d; font-size: 18px">
-					Created with love by {{from_name}}
-				</p>
-			</div>
+			<!-- Content -->
+			<tr>
+				<td class="content">
+					<!-- Greeting -->
+					<p style="font-size: 20px; color: #be185d; font-weight: bold">
+						Dear <strong>{{to_name}}</strong>,
+					</p>
 
-			<div class="message">
-				<p>Dear <strong>{{to_name}}</strong>,</p>
-				<p style="margin-top: 15px">
-					Someone special has created a unique love song just for you. Click
-					below to listen to your personalized Valentine's melody.
-				</p>
-			</div>
+					<p style="color: #4b5563; margin: 20px 0; font-size: 18px">
+						Someone special has poured their heart into creating a unique love
+						song just for you. Let the melody express their feelings through
+						this personalized Valentine's tune. 🎵
+					</p>
 
-			<div class="song-card">
-				<div style="font-size: 48px; margin-bottom: 20px">🎵</div>
-				<a href="{{song_url}}" class="play-button"> ▶️ Play Your Love Song </a>
-				<p style="color: #6b7280; font-size: 14px; margin-top: 10px">
-					Click to listen to your special Valentine's melody
-				</p>
-			</div>
+					<!-- Song Card -->
+					<div class="song-card">
+						<table
+							width="100%"
+							cellpadding="0"
+							cellspacing="0"
+							role="presentation"
+						>
+							<tr>
+								<td style="text-align: center; font-size: 64px; padding: 10px">
+									🎵 ❤️ 🎶
+								</td>
+							</tr>
+							<tr>
+								<td style="text-align: center">
+									<a href="{{song_url}}" class="play-button">
+										♪ Listen to Your Love Song ♪
+									</a>
+								</td>
+							</tr>
+							<tr>
+								<td
+									style="
+										text-align: center;
+										color: #be185d;
+										font-size: 16px;
+										padding-top: 15px;
+									"
+								>
+									Click to experience your special Valentine's melody
+								</td>
+							</tr>
+						</table>
+					</div>
 
-			<div class="love-note">
-				<h3 style="color: #be185d; font-size: 20px; margin-bottom: 15px">
-					💌 A Special Message
-				</h3>
-				<p style="font-style: italic; color: #4b5563">{{message}}</p>
-			</div>
+					<!-- Message Box -->
+					<div class="message-box">
+						<table
+							width="100%"
+							cellpadding="0"
+							cellspacing="0"
+							role="presentation"
+						>
+							<tr>
+								<td style="padding-bottom: 20px">
+									<span
+										style="color: #be185d; font-size: 24px; font-weight: bold"
+									>
+										💌 A Message From The Heart
+									</span>
+								</td>
+							</tr>
+							<tr>
+								<td
+									style="
+										font-style: italic;
+										color: #4b5563;
+										font-size: 18px;
+										line-height: 1.8;
+									"
+								>
+									{{message}}
+								</td>
+							</tr>
+						</table>
+					</div>
 
-			<p style="text-align: center; margin: 30px 0">
-				With love,<br />
-				<strong style="color: #be185d; font-size: 18px">{{from_name}}</strong>
-			</p>
+					<!-- Signature -->
+					<table
+						width="100%"
+						cellpadding="0"
+						cellspacing="0"
+						role="presentation"
+					>
+						<tr>
+							<td style="text-align: center; padding: 30px 0">
+								With all my love,<br />
+								<strong
+									style="
+										color: #be185d;
+										font-size: 22px;
+										display: block;
+										margin-top: 10px;
+									"
+								>
+									{{from_name}} 💝
+								</strong>
+							</td>
+						</tr>
+					</table>
 
-			<div class="footer">
-				<p>Created with 💝 by Valentine's Song Generator</p>
-				<p style="margin-top: 10px">
-					Share the love by creating your own Valentine's song
-				</p>
-			</div>
-		</div>
+					<hr class="divider" />
+
+					<!-- Footer -->
+					<table
+						width="100%"
+						cellpadding="0"
+						cellspacing="0"
+						role="presentation"
+					>
+						<tr>
+							<td class="footer">
+								<p style="margin: 5px 0; font-size: 18px; font-weight: bold">
+									Created with 💝 by Valentine's Song Generator
+								</p>
+								<p style="margin: 10px 0; font-size: 16px">
+									✨ Share the love by creating your own Valentine's song ✨
+								</p>
+							</td>
+						</tr>
+					</table>
+				</td>
+			</tr>
+		</table>
 	</body>
 </html>

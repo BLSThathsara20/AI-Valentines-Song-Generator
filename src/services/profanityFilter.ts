@@ -23,11 +23,10 @@ class ProfanityFilter {
     if (!text) return { cleaned: '', wasFiltered: false };
 
     let wasFiltered = false;
-    // Improved word detection with punctuation handling
-    let cleaned = text.split(/([.,!?\s]+)/).map(part => {
+    // Split text into words while preserving punctuation and spaces
+    let cleaned = text.split(/\b/).map(part => {
       const lowerPart = part.toLowerCase().trim();
-      if (this.badWords.has(lowerPart) || 
-          Array.from(this.badWords).some(bad => lowerPart.includes(bad))) {
+      if (this.badWords.has(lowerPart)) {
         wasFiltered = true;
         return '❤️';  // Replace with heart emoji instead of asterisks
       }

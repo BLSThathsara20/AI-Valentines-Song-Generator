@@ -40,9 +40,6 @@ export function WhatsAppShareModal({ isOpen, onClose, songTitle, songUrl }: What
   const encodedData = btoa(JSON.stringify(songData));
   const playPageUrl = `${window.location.origin}/lyrics-to-song/#/play/${encodedData}`;
 
-  // Log the data for debugging
-  console.log('WhatsApp Share Data:', { songUrl, songTitle, encodedData });
-
   const [message, setMessage] = useState(
     `🎵 Check out this Valentine's song I created: "${songTitle}"\n\n` +
     `Listen here: ${playPageUrl}\n\n` +

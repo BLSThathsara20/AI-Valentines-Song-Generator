@@ -382,8 +382,6 @@ const checkAndSendNotifications = async () => {
     !item.notificationSent
   );
 
-  console.log('Checking for pending notifications:', pendingNotifications.length);
-
   // Send notifications for each pending item
   for (const item of pendingNotifications) {
     try {
@@ -777,11 +775,11 @@ export default function MusicGenerator() {
     // Get voice type and build tags/negative tags
     const isFemaleSinger = selectedOptions.voiceType === 'female';
     const voiceTags = isFemaleSinger 
-      ? ['female_vocals', 'female_voice', 'female_singer']
-      : ['male_vocals', 'male_voice', 'male_singer'];
+      ? 'female_vocals,female_voice,female_singer'
+      : 'male_vocals,male_voice,male_singer';
     const negativeTags = isFemaleSinger 
-      ? ['male_vocals', 'male_voice', 'male_singer']
-      : ['female_vocals', 'female_voice', 'female_singer'];
+      ? 'male_vocals,male_voice,male_singer'
+      : 'female_vocals,female_voice,female_singer';
 
     const requestData = {
       model: 'music-u',
@@ -790,10 +788,10 @@ export default function MusicGenerator() {
         gpt_description_prompt: `${selectedOptions.voiceType}, ${selectedOptions.genre}, ${selectedOptions.mood}, ${selectedOptions.era}`,
         lyrics_type: 'user',
         make_instrumental: false,
-        negative_tags: negativeTags.join(','),
+        negative_tags: negativeTags,
         prompt: prompt,
         seed: Math.floor(Math.random() * 1000000),
-        tags: voiceTags.join(',')
+        tags: voiceTags
       }
     };
 
@@ -940,13 +938,22 @@ export default function MusicGenerator() {
 
   // Add a preview button click handler
   const handlePreviewClick = () => {
+    // Get voice type and build tags/negative tags
+    const isFemaleSinger = selectedOptions.voiceType === 'female';
+    const voiceTags = isFemaleSinger 
+      ? 'female_vocals,female_voice,female_singer'
+      : 'male_vocals,male_voice,male_singer';
+    const negativeTags = isFemaleSinger 
+      ? 'male_vocals,male_voice,male_singer'
+      : 'female_vocals,female_voice,female_singer';
+
     // Build description parts
     const descriptionParts = [];
     
     // Add voice type as primary description
-    if (selectedOptions.voiceType === 'female_vocals') {
+    if (selectedOptions.voiceType === 'female') {
       descriptionParts.push('female vocal', 'female singer', 'female voice');
-    } else if (selectedOptions.voiceType === 'male_vocals') {
+    } else {
       descriptionParts.push('male vocal', 'male singer', 'male voice');
     }
 
@@ -961,19 +968,10 @@ export default function MusicGenerator() {
       input: {
         prompt: `[Verse]\n${prompt}`,
         lyrics_type: "user",
-        // Add GPT description prompt
         gpt_description_prompt: descriptionParts.join(', '),
-        // Add tags
-        tags: selectedOptions.voiceType === 'female_vocals' 
-          ? 'female_vocals,female_voice,female_singer'
-          : 'male_vocals,male_voice,male_singer',
-        // Add negative tags
-        negative_tags: selectedOptions.voiceType === 'female_vocals'
-          ? 'male_vocals,male_voice,male_singer'
-          : 'female_vocals,female_voice,female_singer',
-        // Force non-instrumental
+        tags: voiceTags,
+        negative_tags: negativeTags,
         make_instrumental: false,
-        // Add random seed
         seed: Math.floor(Math.random() * 1000000)
       },
       config: {
@@ -1285,8 +1283,6 @@ export default function MusicGenerator() {
         !item.notificationSent
       );
 
-      console.log('Checking for pending notifications:', pendingNotifications.length);
-
       // Send notifications for each pending item
       for (const item of pendingNotifications) {
         try {
@@ -1336,6 +1332,65 @@ export default function MusicGenerator() {
 
     return () => clearInterval(interval);
   }, []); // Empty dependency array means this runs once on mount
+
+  // Update the retry logic
+  const handleRetry = async (item: GenerationHistoryItem) => {
+    try {
+      // Update current item to pending status
+      updateHistoryItem(item.id, { 
+        status: 'pending',
+        error: undefined,
+        error_response: undefined,
+        timestamp: Date.now()
+      });
+
+      // Remove from processing tasks if present
+      setProcessingTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(item.id);
+        return newSet;
+      });
+
+      // Add to processing tasks
+      setProcessingTasks(prev => new Set(prev).add(item.id));
+
+      // Get voice type from tags or use default male
+      const isFemaleSinger = item.tags?.includes('female_vocals') ?? false;
+      const voiceTags = isFemaleSinger 
+        ? 'female_vocals,female_voice,female_singer'
+        : 'male_vocals,male_voice,male_singer';
+      const negativeTags = isFemaleSinger 
+        ? 'male_vocals,male_voice,male_singer'
+        : 'female_vocals,female_voice,female_singer';
+
+      // Call API with same parameters but correct voice tags
+      const response = await axios.post(
+        'https://api.piapi.ai/api/v1/task',
+        {
+          model: 'music-u',
+          task_type: 'generate_music',
+          input: {
+            prompt: item.prompt,
+            lyrics_type: 'user',
+            make_instrumental: false,
+            tags: voiceTags,
+            negative_tags: negativeTags
+          }
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${API_KEY}`,
+            'X-API-Key': API_KEY,
+            'Accept': 'application/json'
+          }
+        }
+      );
+
+      // ... rest of the retry logic ...
+    } catch (error) {
+      // ... error handling ...
+    }
+  };
 
   return (
     <>
@@ -1861,7 +1916,6 @@ export default function MusicGenerator() {
                                         updateHistoryItem(item.id, { 
                                           status: 'pending',
                                           error: undefined,
-                                          error_response: undefined,
                                           timestamp: Date.now()
                                         });
 
@@ -1875,7 +1929,16 @@ export default function MusicGenerator() {
                                         // Add to processing tasks
                                         setProcessingTasks(prev => new Set(prev).add(item.id));
 
-                                        // Call API with same parameters
+                                        // Get voice type from tags or use default male
+                                        const isFemaleSinger = item.tags?.includes('female_vocals') ?? false;
+                                        const voiceTags = isFemaleSinger 
+                                          ? 'female_vocals,female_voice,female_singer'
+                                          : 'male_vocals,male_voice,male_singer';
+                                        const negativeTags = isFemaleSinger 
+                                          ? 'male_vocals,male_voice,male_singer'
+                                          : 'female_vocals,female_voice,female_singer';
+
+                                        // Call API with same parameters but correct voice tags
                                         const response = await axios.post(
                                           'https://api.piapi.ai/api/v1/task',
                                           {
@@ -1885,8 +1948,8 @@ export default function MusicGenerator() {
                                               prompt: item.prompt,
                                               lyrics_type: 'user',
                                               make_instrumental: false,
-                                              tags: 'male_vocals,male_voice,male_singer',
-                                              negative_tags: 'female_vocals,female_voice,female_singer'
+                                              tags: voiceTags,
+                                              negative_tags: negativeTags
                                             }
                                           },
                                           {
@@ -2004,6 +2067,26 @@ export default function MusicGenerator() {
           onClose={() => setShowEmailShare(false)}
         />
       )}
+
+      {/* Copyright Footer */}
+      <div className="fixed bottom-0 left-0 right-0 p-3 bg-gradient-to-r from-pink-50/90 to-red-50/90 backdrop-blur-sm border-t border-pink-100 z-40">
+        <div className="max-w-2xl mx-auto text-center">
+          <p className="text-sm text-gray-600 flex items-center justify-center gap-2">
+            <span>Made with</span>
+            <HeartIcon className="w-4 h-4 text-pink-500 animate-pulse" />
+            <span>by</span>
+            <a 
+              href="https://www.enfection.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="font-semibold text-pink-600 hover:text-pink-700 transition-colors"
+            >
+              Enfection
+            </a>
+            <span>© {new Date().getFullYear()}</span>
+          </p>
+        </div>
+      </div>
     </>
   );
 } 

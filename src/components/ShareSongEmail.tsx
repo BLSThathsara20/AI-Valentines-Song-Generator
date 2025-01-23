@@ -22,6 +22,35 @@ function AnimatedHeart({ className = "w-12 h-12" }: { className?: string }) {
   );
 }
 
+// Helper function to detect emojis
+const containsEmoji = (text: string): boolean => {
+  const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F000}-\u{1F02F}]|[\u{1F0A0}-\u{1F0FF}]|[\u{1F100}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F910}-\u{1F96B}]|[\u{1F980}-\u{1F9E0}]/u;
+  return emojiRegex.test(text);
+};
+
+// Helper function to detect prohibited words
+const containsProhibitedWords = (text: string): boolean => {
+  const prohibitedWords = ['fuck', 'sex']; // Add more words as needed
+  const lowerText = text.toLowerCase();
+  return prohibitedWords.some(word => lowerText.includes(word));
+};
+
+// Helper function to detect URLs
+const containsUrl = (text: string): boolean => {
+  const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|([^\s]+\.[a-zA-Z]{2,})/gi;
+  return urlRegex.test(text);
+};
+
+// Remove emojis from text
+const removeEmojis = (text: string): string => {
+  return text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F000}-\u{1F02F}]|[\u{1F0A0}-\u{1F0FF}]|[\u{1F100}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F910}-\u{1F96B}]|[\u{1F980}-\u{1F9E0}]/gu, '');
+};
+
+// Remove URLs from text
+const removeUrls = (text: string): string => {
+  return text.replace(/(https?:\/\/[^\s]+)|(www\.[^\s]+)|([^\s]+\.[a-zA-Z]{2,})/gi, '');
+};
+
 export function ShareSongEmail({ songTitle, songUrl, onClose }: ShareSongEmailProps) {
   const [formData, setFormData] = useState({
     recipientName: '',
@@ -31,9 +60,54 @@ export function ShareSongEmail({ songTitle, songUrl, onClose }: ShareSongEmailPr
   });
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [loveNoteError, setLoveNoteError] = useState('');
+
+  const handleLoveNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newText = e.target.value;
+    let cleanText = newText;
+    let hasError = false;
+
+    // Check for URLs
+    if (containsUrl(newText)) {
+      setLoveNoteError('URLs are not allowed in the love note');
+      cleanText = removeUrls(cleanText);
+      hasError = true;
+    }
+
+    // Check for prohibited words
+    if (containsProhibitedWords(newText)) {
+      setLoveNoteError('Your message contains prohibited words');
+      hasError = true;
+      return; // Don't update if it contains prohibited words
+    }
+
+    if (!hasError) {
+      setLoveNoteError(''); // Clear error if no issues
+    }
+
+    setFormData(prev => ({ ...prev, loveNote: cleanText }));
+  };
+
+  // Handle paste prevention for love note
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    setLoveNoteError('Pasting text is not allowed for security reasons');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Final validation before sending
+    if (containsUrl(formData.loveNote)) {
+      setLoveNoteError('URLs are not allowed in the love note');
+      return;
+    }
+
+    if (containsProhibitedWords(formData.loveNote)) {
+      setLoveNoteError('Your message contains prohibited words');
+      return;
+    }
+
     setIsLoading(true);
     
     try {
@@ -154,13 +228,19 @@ export function ShareSongEmail({ songTitle, songUrl, onClose }: ShareSongEmailPr
                 <textarea
                   required
                   value={formData.loveNote}
-                  onChange={(e) => setFormData(prev => ({ ...prev, loveNote: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white rounded-xl text-gray-700 border-2 border-gray-100 focus:border-pink-500 focus:ring-2 focus:ring-pink-200 transition-all"
+                  onChange={handleLoveNoteChange}
+                  onPaste={handlePaste}
+                  className={`w-full px-4 py-3 bg-white rounded-xl text-gray-700 border-2 ${
+                    loveNoteError ? 'border-red-300' : 'border-gray-100'
+                  } focus:border-pink-500 focus:ring-2 focus:ring-pink-200 transition-all`}
                   rows={4}
                   placeholder="Write a personal message..."
                 />
                 <HeartIcon className="absolute right-3 top-3 w-5 h-5 text-pink-300" />
               </div>
+              {loveNoteError && (
+                <p className="mt-1 text-sm text-red-500">{loveNoteError}</p>
+              )}
             </div>
 
             {status === 'error' && (

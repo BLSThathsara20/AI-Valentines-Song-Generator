@@ -94,12 +94,11 @@ export interface GenerationHistoryItem {
   prompt: string;
   status: 'pending' | 'completed' | 'failed';
   timestamp: number;
-  notificationSent?: boolean;
   completedAt?: number;
-  songs?: Song[];
   error?: string;
-  error_response?: any;
-  tags?: string;
+  songs?: Song[];
+  emailNotificationSent?: boolean;
+  smsNotificationSent?: boolean;
 }
 
 export type HistoryItemInput = Omit<GenerationHistoryItem, 'completedAt'> & {

@@ -41,9 +41,8 @@ export function WhatsAppShareModal({ isOpen, onClose, songTitle, songUrl }: What
   const playPageUrl = `${window.location.origin}/lyrics-to-song/#/play/${encodedData}`;
 
   const [message, setMessage] = useState(
-    `🎵 Check out this Valentine's song I created: "${songTitle}"\n\n` +
-    `Listen here: ${playPageUrl}\n\n` +
-    `💝 Create your own Valentine's song at: ${window.location.origin}/lyrics-to-song/`
+    `Check out this Valentine's song I created: "${songTitle}"\n\n` +
+    `Listen here: ${playPageUrl}\n\n`
   );
 
   useEffect(() => {

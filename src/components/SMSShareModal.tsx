@@ -110,8 +110,15 @@ export function SMSShareModal({ isOpen, onClose, songTitle, songUrl }: SMSShareM
     if (isOpen) {
       initializeMessage();
       setMessageError(''); // Clear any previous message errors
+      setShowSuccess(false); // Reset success state when modal is opened
     }
   }, [isOpen, songTitle, songUrl]);
+
+  // Wrap the onClose function to reset states
+  const handleClose = () => {
+    setShowSuccess(false); // Reset success state when modal is closed
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -213,7 +220,7 @@ export function SMSShareModal({ isOpen, onClose, songTitle, songUrl }: SMSShareM
         localStorage.setItem('PHONE_STORAGE_KEY', phone);
         setShowSuccess(true);
         // Close modal after showing success message
-        setTimeout(onClose, 2000);
+        setTimeout(handleClose, 2000); // Use handleClose instead of onClose
       } else {
         throw new Error('Failed to send SMS');
       }
@@ -237,7 +244,7 @@ export function SMSShareModal({ isOpen, onClose, songTitle, songUrl }: SMSShareM
             </div>
           </div>
           <button 
-            onClick={onClose} 
+            onClick={handleClose} // Use handleClose instead of onClose
             className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
           >
             <XMarkIcon className="w-6 h-6" />
@@ -349,7 +356,7 @@ export function SMSShareModal({ isOpen, onClose, songTitle, songUrl }: SMSShareM
                   {isLoading ? 'Sending...' : 'Send SMS'}
                 </button>
                 <button
-                  onClick={onClose}
+                  onClick={handleClose} // Use handleClose instead of onClose
                   className="px-4 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"
                 >
                   Cancel

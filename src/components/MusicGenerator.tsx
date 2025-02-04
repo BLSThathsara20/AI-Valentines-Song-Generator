@@ -23,6 +23,7 @@ import { GenerationLoadingModal } from './GenerationLoadingModal';
 import { SongStatusNotifier } from './SongStatusNotifier';
 import { sendSMS } from '../services/smsService';
 import { SMSShareModal } from './SMSShareModal';
+import SongGenerationFunction from './SongGenerationFunction';
 
 const API_KEY = import.meta.env.VITE_SUNO_API_KEY;
 const HISTORY_KEY = 'music_generation_history';
@@ -567,6 +568,8 @@ export default function MusicGenerator() {
   const [showHearts, setShowHearts] = useState(false);
   const [showSMSShare, setShowSMSShare] = useState(false);
   const [selectedSong, setSelectedSong] = useState<{ title: string; url: string } | null>(null);
+  // Add state to manage expanded state
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
 
   // Add this computed value
   const hasReachedLimit = history.length >= MAX_SONGS_LIMIT;
@@ -782,6 +785,7 @@ export default function MusicGenerator() {
       if (!song.finished) return null;
 
       const songUrl = getSongUrl(song.song_path);
+      const isCurrentlyPlaying = currentSong?.url === songUrl && isPlaying;
 
       return (
         <div className="mb-4">
@@ -791,10 +795,16 @@ export default function MusicGenerator() {
               title={song.title}
               tags={song.tags.slice(0, 3)}
               onPlay={(songData) => {
-                setCurrentSong(songData);
-                setIsPlaying(true);
+                // If there's no current song (was closed) or it's a different song
+                if (!currentSong || currentSong.url !== songUrl) {
+                  setCurrentSong(songData);
+                  setIsPlaying(true);
+                } else {
+                  // If it's the same song, just toggle play state
+                  setIsPlaying(!isPlaying);
+                }
               }}
-              isGlobalPlaying={isPlaying}
+              isGlobalPlaying={isCurrentlyPlaying}
               isCurrentSong={currentSong?.url === songUrl}
             />
             <div className="px-4 pb-3 flex justify-end gap-2 border-t border-pink-50 pt-2">
@@ -889,30 +899,33 @@ export default function MusicGenerator() {
       return;
     }
 
-    // Get voice type and build tags/negative tags
-    const isFemaleSinger = selectedOptions.voiceType === 'female';
-    const voiceTags = isFemaleSinger 
-      ? 'female_vocals,female_voice,female_singer'
-      : 'male_vocals,male_voice,male_singer';
-    const negativeTags = isFemaleSinger 
-      ? 'male_vocals,male_voice,male_singer'
-      : 'female_vocals,female_voice,female_singer';
-
-    const requestData = {
-      model: 'music-u',
-      task_type: 'generate_music',
-      input: {
-        gpt_description_prompt: `${selectedOptions.voiceType}, ${selectedOptions.genre}, ${selectedOptions.mood}, ${selectedOptions.era}`,
-        lyrics_type: 'user',
-        make_instrumental: false,
-        negative_tags: negativeTags,
-        prompt: prompt,
-        seed: Math.floor(Math.random() * 1000000),
-        tags: voiceTags
-      }
-    };
+    // Set generating state to true at the start
+    setIsGenerating(true);
 
     try {
+      // Get voice type and build tags/negative tags
+      const isFemaleSinger = selectedOptions.voiceType === 'female';
+      const voiceTags = isFemaleSinger 
+        ? 'female_vocals,female_voice,female_singer'
+        : 'male_vocals,male_voice,male_singer';
+      const negativeTags = isFemaleSinger 
+        ? 'male_vocals,male_voice,male_singer'
+        : 'female_vocals,female_voice,female_singer';
+
+      const requestData = {
+        model: 'music-u',
+        task_type: 'generate_music',
+        input: {
+          gpt_description_prompt: `${selectedOptions.voiceType}, ${selectedOptions.genre}, ${selectedOptions.mood}, ${selectedOptions.era}`,
+          lyrics_type: 'user',
+          make_instrumental: false,
+          negative_tags: negativeTags,
+          prompt: prompt,
+          seed: Math.floor(Math.random() * 1000000),
+          tags: voiceTags
+        }
+      };
+
       const startTime = Date.now();
 
       const response = await axios.post('https://api.piapi.ai/api/v1/task', requestData, {
@@ -980,6 +993,12 @@ export default function MusicGenerator() {
       });
 
       logError(`Music Generation Error: ${error}`);
+      
+      // Set generating state back to false on error
+      setIsGenerating(false);
+    } finally {
+      // Set generating state back to false after task is initialized
+      setIsGenerating(false);
     }
   };
 
@@ -1193,19 +1212,26 @@ export default function MusicGenerator() {
     });
   };
 
-  // Add audio management
+  // Update the audio management effect
   useEffect(() => {
-    const handleAudioStateChange = (e: CustomEvent) => {
-      if (e.detail.isPlaying && currentSong && e.detail.url !== currentSong.url) {
+    const handleAudioStateChange = (e: CustomEvent<{ isPlaying: boolean; url: string }>) => {
+      const { isPlaying: newIsPlaying, url } = e.detail;
+      
+      // If the event is for the current song, update its playing state
+      if (url === currentSong?.url) {
+        setIsPlaying(newIsPlaying);
+      }
+      // If a different song is playing, ensure this one is marked as not playing
+      else if (newIsPlaying) {
         setIsPlaying(false);
       }
     };
 
-    window.addEventListener('audioStateChange' as any, handleAudioStateChange);
+    window.addEventListener('audioStateChange', handleAudioStateChange as EventListener);
     return () => {
-      window.removeEventListener('audioStateChange' as any, handleAudioStateChange);
+      window.removeEventListener('audioStateChange', handleAudioStateChange as EventListener);
     };
-  }, [currentSong]);
+  }, [currentSong, setIsPlaying]);
 
   // Update the completion handler
   const handleSongCompletion = (song: any) => {
@@ -1256,6 +1282,7 @@ export default function MusicGenerator() {
         try {
           // Send email notification
           if (storedEmail) {
+            console.log("Notification sent triggered");
             const emailData = {
               to_email: storedEmail,
               user_name: "Music Lover",
@@ -1444,7 +1471,7 @@ export default function MusicGenerator() {
             localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
             setHistory(updatedHistory);
 
-            console.log('✅ Notification sent for song:', item.id);
+            console.log('✅ 11111Notification sent for song:', item.id);
             
             setNotification({
               type: 'success',
@@ -1545,6 +1572,19 @@ export default function MusicGenerator() {
     setShowSMSShare(true);
   };
 
+  // Function to toggle expanded state
+  const toggleExpanded = (id: string) => {
+    setExpandedItems((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
   return (
     <>
       <ProcessingStatus processingCount={processingTasks.size} />
@@ -1578,342 +1618,47 @@ export default function MusicGenerator() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </button>
-            <h1 className="text-3xl md:text-4xl font-bold text-red-600 mb-2 flex items-center justify-center gap-2">
-              <HeartIcon className="w-6 h-6 md:w-8 md:h-8" />
+                  <h1 className="text-3xl md:text-4xl font-bold text-red-600 mb-2 flex items-center justify-center gap-2">
+                    <HeartIcon className="w-6 h-6 md:w-8 md:h-8" />
                     <span className="hidden md:inline">Valentine's Song Generator</span>
-              <span className="md:hidden">Love Song Maker</span>
-              <HeartIcon className="w-6 h-6 md:w-8 md:h-8" />
-            </h1>
-            <p className="text-sm md:text-base text-gray-600">Create your perfect Valentine's Day song</p>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-xl p-4 md:p-6 mb-4 md:mb-6">
-                  {/* Step 1: Music Style */}
-                  <div className="mb-8">
-                    <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <HeartIcon className="w-5 h-5 text-pink-500" />
-                      Step 1: Music Style
-                    </h2>
-
-                    <div className="bg-gradient-to-br from-pink-50 to-red-50 rounded-xl p-6 border border-pink-100 shadow-lg relative overflow-hidden">
-                      {/* Decorative floating hearts */}
-                      <div className="absolute inset-0 pointer-events-none">
-                        {[...Array(5)].map((_, i) => (
-                          <div
-                            key={i}
-                            className="absolute animate-float-slow"
-                            style={{
-                              left: `${Math.random() * 100}%`,
-                              top: `${Math.random() * 100}%`,
-                              animationDelay: `${Math.random() * 5}s`,
-                              opacity: 0.1
-                            }}
-                          >
-                            <HeartIcon className="w-6 h-6 text-pink-500" />
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Voice Type - 2 columns */}
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                          <span>Voice Type</span>
-                          <span className="text-xs text-gray-500">(Choose the singer's voice)</span>
-                        </label>
-                        <div className="grid grid-cols-2 gap-3">
-                          <StyleOption
-                            label="Female Voice"
-                            value="female"
-                            selected={selectedOptions.voiceType === 'female'}
-                            icon="👩"
-                            onChange={(value) => handleSelectChange('voiceType', value)}
-                            colorScheme="pink"
-                          />
-                          <StyleOption
-                            label="Male Voice"
-                            value="male"
-                            selected={selectedOptions.voiceType === 'male'}
-                            icon="👨"
-                            onChange={(value) => handleSelectChange('voiceType', value)}
-                            colorScheme="blue"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Genre - 2 columns on mobile, 3 on desktop */}
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                          <span>Genre</span>
-                          <span className="text-xs text-gray-500">(Select music style)</span>
-                        </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                          {GENRE_OPTIONS.map((option) => (
-                            <StyleOption
-                              key={option.value}
-                              label={option.label}
-                              value={option.value}
-                              selected={selectedOptions.genre === option.value}
-                              icon={getGenreIcon(option.value)}
-                              onChange={(value) => handleSelectChange('genre', value)}
-                              colorScheme={selectedOptions.voiceType === 'male' ? 'blue' : 'pink'}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Mood - 2 columns on mobile, 3 on desktop */}
-                      <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                          <span>Mood</span>
-                          <span className="text-xs text-gray-500">(How should it feel?)</span>
-                        </label>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                          {MOOD_OPTIONS.map((option) => (
-                            <StyleOption
-                              key={option.value}
-                              label={option.label}
-                              value={option.value}
-                              selected={selectedOptions.mood === option.value}
-                              icon={getMoodIcon(option.value)}
-                              onChange={(value) => handleSelectChange('mood', value)}
-                              colorScheme={selectedOptions.voiceType === 'male' ? 'blue' : 'pink'}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Era - 2 columns on mobile, 3 on desktop */}
-                      <div className="mb-0">
-                        <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                          <span>Era</span>
-                          <span className="text-xs text-gray-500">(Choose time period)</span>
-                        </label>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                          {ERA_OPTIONS.map((option) => (
-                            <StyleOption
-                              key={option.value}
-                              label={option.label}
-                              value={option.value}
-                              selected={selectedOptions.era === option.value}
-                              icon={getEraIcon(option.value)}
-                              onChange={(value) => handleSelectChange('era', value)}
-                              colorScheme={selectedOptions.voiceType === 'male' ? 'blue' : 'pink'}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Step 2: Lyrics (Optional) */}
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <SparklesIcon className="w-5 h-5 text-pink-500" />
-                Step 2: Song Lyrics
-              </h2>
-
-              {/* Main Lyrics Input */}
-              <div className="bg-gradient-to-br from-pink-50 to-red-50 rounded-xl p-6 border border-pink-100 shadow-lg space-y-6">
-                {/* AI Assistant Toggle */}
-                <div className="flex items-center justify-between p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-pink-100 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-r from-pink-500 to-red-500 rounded-full text-white shadow-md">
-                      <SparklesIcon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-800">AI Lyrics Assistant</h3>
-                      <p className="text-sm text-gray-600">Let AI help write your love song</p>
-                    </div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={showLyricsInput}
-                      onChange={(e) => {
-                        setShowLyricsInput(e.target.checked);
-                        if (!e.target.checked) {
-                          setLyricsIdea('');
-                        }
-                      }}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-pink-500 peer-checked:to-red-500"></div>
-                  </label>
+                    <span className="md:hidden">Love Song Maker</span>
+                    <HeartIcon className="w-6 h-6 md:w-8 md:h-8" />
+                  </h1>
+                  <p className="text-sm md:text-base text-gray-600">Create your perfect Valentine's Day song</p>
                 </div>
 
-                {/* AI Generation Section */}
-                {showLyricsInput && (
-                  <div className="space-y-4">
-                    {/* Style Pills */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-3">
-                        Choose Your Style
-                      </label>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {PROMPT_TYPES.map(type => {
-                          const isSelected = promptType === type.value;
-                          return (
-                            <button
-                              key={type.value}
-                              onClick={() => setPromptType(type.value as typeof promptType)}
-                              className={`relative overflow-hidden group p-3 rounded-xl transition-all duration-300 ${
-                                isSelected
-                                  ? 'bg-gradient-to-r from-pink-500 to-red-500 text-white shadow-lg scale-[1.02]'
-                                  : 'bg-white hover:bg-pink-50 text-gray-600 hover:text-pink-500 border border-pink-100'
-                              }`}
-                            >
-                              <div className="relative z-10">
-                                <span className="block text-lg mb-1">
-                                  {type.value === 'romantic' ? '💝' : 
-                                   type.value === 'friendship' ? '🤝' : 
-                                   type.value === 'nature' ? '🌸' : '✨'}
-                                </span>
-                                <span className="text-sm font-medium">{type.label}</span>
-                              </div>
-                              {isSelected && (
-                                <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-red-500/20 animate-pulse" />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Lyrics Idea Input */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Describe Your Song
-                        <span className="text-xs text-gray-500 ml-2">
-                          ({MIN_LYRICS_CHARS}-{MAX_LYRICS_CHARS} characters)
-                        </span>
-                      </label>
-                      <div className="relative">
-                        <textarea
-                          className="w-full p-4 border border-pink-100 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent min-h-[120px] shadow-sm bg-white/80 backdrop-blur-sm"
-                          placeholder="What's your love story? Describe the feelings, moments, or memories you want to capture in your song..."
-                          value={lyricsIdea}
-                          onChange={(e) => handleLyricsChange(e.target.value)}
-                          maxLength={MAX_LYRICS_CHARS}
-                        />
-                        <div className="absolute bottom-3 right-3 flex items-center gap-2">
-                          <span className="text-xs text-gray-500">{lyricsIdea.length}/{MAX_LYRICS_CHARS}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Generate Button */}
-                    <button
-                      onClick={generateLyrics}
-                      disabled={isGeneratingLyrics || lyricsIdea.length < MIN_LYRICS_CHARS}
-                      className={`w-full relative overflow-hidden p-4 rounded-xl text-white shadow-lg transition-all duration-300 flex items-center justify-center gap-2 ${
-                        isGeneratingLyrics || lyricsIdea.length < MIN_LYRICS_CHARS
-                          ? 'bg-gray-400 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-pink-500 to-red-500 hover:from-pink-600 hover:to-red-600 hover:scale-[1.02]'
-                      }`}
-                    >
-                      {isGeneratingLyrics ? (
-                        <>
-                          <LoadingWave />
-                          <span>Creating Your Lyrics...</span>
-                        </>
-                      ) : (
-                        <>
-                          <SparklesIcon className="w-5 h-5" />
-                          Generate with AI
-                        </>
-                      )}
-                      {!isGeneratingLyrics && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-red-500/20 animate-pulse" />
-                      )}
-                    </button>
-                  </div>
-                )}
-
-                {/* Final Lyrics Input */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Your Song Lyrics
-                    {showLyricsInput && (
-                      <span className="text-xs text-gray-500 ml-2">
-                        (Feel free to edit the generated lyrics)
-                      </span>
-                    )}
-                  </label>
-                  <div className="relative">
-                    <textarea
-                      className="w-full p-4 border border-pink-100 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent min-h-[200px] shadow-sm bg-white/80 backdrop-blur-sm"
-                      placeholder={showLyricsInput 
-                        ? "Your AI-generated lyrics will appear here. You can edit them before creating your song..."
-                        : "Write your song lyrics here..."}
-                      value={prompt}
-                      onChange={(e) => {
-                        if (e.target.value.length <= MAX_LYRICS_CHARS) {
-                          handlePromptChange(e.target.value);
-                        }
-                      }}
-                      maxLength={MAX_LYRICS_CHARS}
-                    />
-                    <div className="absolute bottom-3 right-3">
-                      <span className="text-xs text-gray-500">{prompt.length}/{MAX_LYRICS_CHARS}</span>
-                    </div>
-                    {/* Floating hearts decoration */}
-                    <div className="absolute -right-2 -top-2 text-pink-500/20 text-2xl">💝</div>
-                    <div className="absolute -left-2 -bottom-2 text-red-500/20 text-2xl">💝</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-                  {/* Step 3: Generate Button */}
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <HeartIcon className="w-5 h-5 text-pink-500" />
-                Step 3: Create Your Song
-              </h2>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={generateMusic}
-                  disabled={isGenerating || history.length >= MAX_SONGS_LIMIT}
-                  className={`w-full py-3 px-6 rounded-xl font-semibold text-white 
-                    flex items-center justify-center gap-2 transition-all
-                    ${isGenerating || history.length >= MAX_SONGS_LIMIT 
-                      ? 'bg-gray-400 cursor-not-allowed opacity-50' 
-                      : 'bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 shadow-lg hover:shadow-xl'
-                    }`}
-                  >
-                    {isGenerating ? (
-                      <>
-                      <LoadingWave />
-                        Generating...
-                      </>
-                    ) : history.length >= MAX_SONGS_LIMIT ? (
-                      <>
-                        <span>Song Limit Reached (5/5)</span>
-                      </>
-                  ) : (
-                    <>
-                        <SparklesIcon className="w-5 h-5" />
-                      Create Valentine's Song
-                    </>
-                  )}
-                </button>
+<SongGenerationFunction
+                  selectedOptions={selectedOptions}
+                  handleSelectChange={handleSelectChange}
+                  showLyricsInput={showLyricsInput}
+                  setShowLyricsInput={setShowLyricsInput}
+                  lyricsIdea={lyricsIdea}
+                  setLyricsIdea={setLyricsIdea}
+                  promptType={promptType}
+                  setPromptType={setPromptType}
+                  isGeneratingLyrics={isGeneratingLyrics}
+                  generateLyrics={generateLyrics}
+                  prompt={prompt}
+                  handlePromptChange={handlePromptChange}
+                  isGenerating={isGenerating}
+                  generateMusic={generateMusic}
+                  history={history}
+                  handlePreviewClick={handlePreviewClick}
+                  MIN_LYRICS_CHARS={MIN_LYRICS_CHARS}
+                  MAX_LYRICS_CHARS={MAX_LYRICS_CHARS}
+                  MAX_SONGS_LIMIT={MAX_SONGS_LIMIT}
+                  GENRE_OPTIONS={GENRE_OPTIONS}
+                  MOOD_OPTIONS={MOOD_OPTIONS}
+                  ERA_OPTIONS={ERA_OPTIONS}
+                  PROMPT_TYPES={PROMPT_TYPES}
+                  getGenreIcon={getGenreIcon}
+                  getMoodIcon={getMoodIcon}
+                  getEraIcon={getEraIcon}
+                />
                 
-                <button
-                  onClick={handlePreviewClick}
-                  className="px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Preview Request/Response"
-                >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
 
-          {/* History Section */}
-          {history.length > 0 && (
+                {/* History Section */}
+                {history.length > 0 && (
                   <div className="mt-8">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
@@ -1942,7 +1687,7 @@ export default function MusicGenerator() {
                       )}
               </div>
                     <div className="space-y-4">
-                {history.map((item, index) => (
+                {history.map((item: HistoryItem, index) => (
                   <div
                     key={item.id}
                           className="relative bg-white rounded-xl shadow-md border border-pink-100 overflow-hidden group hover:shadow-lg transition-shadow duration-300"
@@ -1969,9 +1714,6 @@ export default function MusicGenerator() {
                           <div className="p-4 pt-6">
                             <div className="flex items-start justify-between">
                               <div className="flex-1 ml-8">
-                                <p className="text-sm text-gray-600 whitespace-pre-wrap">
-                                  {item.prompt}
-                                </p>
                                 <div className="flex flex-wrap items-center gap-2 mt-2">
                                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                                     item.status === 'completed' 
@@ -1984,16 +1726,39 @@ export default function MusicGenerator() {
                                      item.status === 'failed' ? '❌ Failed' : 
                                      '✨ Creating Magic...'}
                                   </span>
-                            <span className="text-xs text-gray-500">
-                              {new Date(item.timestamp).toLocaleString()}
-                            </span>
-                                  {/* Only show duration for completed items with both timestamps */}
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(item.timestamp).toLocaleString()}
+                                  </span>
                                   {item.status === 'completed' && item.timestamp && item.completedAt && (
                               <GenerationTime 
                                 startTime={item.timestamp}
                                 endTime={item.completedAt}
                               />
                             )}
+                          </div>
+
+                          {item.songs && item.songs.length > 0 && (
+                            <div className="space-y-3 mt-3 py-4">
+                              {item.songs.map((song) => (
+                                <SongDisplay key={song.id} song={song} />
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Update the prompt display */}
+                          <div className="relative">
+                            <p className={`text-sm text-gray-600 whitespace-pre-wrap transition-all duration-500 ease-in-out ${expandedItems.has(item.id) ? 'max-h-full' : 'max-h-12 overflow-hidden'}`}>
+                              {item.prompt}
+                            </p>
+                            {!expandedItems.has(item.id) && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white to-transparent h-6 pointer-events-none"></div>
+                            )}
+                            <button 
+                              onClick={() => toggleExpanded(item.id)} 
+                              className="text-pink-600 hover:text-pink-800 font-medium mt-2 transition-colors text-xs"
+                            >
+                              {expandedItems.has(item.id) ? 'Show Less' : 'Show More'}
+                            </button>
                           </div>
                         </div>
                         
@@ -2008,159 +1773,159 @@ export default function MusicGenerator() {
                         </button>
                     </div>
 
-                    {item.songs && item.songs.length > 0 && (
-                      <div className="space-y-3 mt-3">
-                        {item.songs.map((song) => (
-                                  <SongDisplay key={song.id} song={song} />
-                                  ))}
-                                </div>
-                            )}
 
-                            {item.status === 'pending' && !item.songs?.length && (
-                              <div className="mt-3 flex items-center justify-center p-4 bg-pink-50/50 rounded-lg border border-pink-100">
-                                <LoadingWave />
-                                <span className="ml-2 text-sm text-pink-600">
-                                  Creating your love song...
-                                </span>
-                              </div>
-                            )}
 
-                            {item.status === 'failed' && item.error && (
-                              <div className="mt-3 p-4 bg-red-50 rounded-lg border border-red-200">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-sm text-red-700">{item.error}</p>
-                              <button
-                                onClick={() => {
-                                        // Debug logs
-                                        console.log('Full item:', item);
-                                        console.log('Error response:', item.error_response);
-                                        
-                                        // Get error details from the complete response
-                                        const errorSong = item.error_response?.data?.output?.songs?.[0];
-                                        const apiError = item.error_response?.data?.error;
-                                        
-                                        console.log('Error Song:', errorSong); // Debug log
-                                        
-                                        setErrorModalDetails({
-                                          isOpen: true,
-                                          details: {
-                                            error_type: errorSong?.error_type || 'Unknown Error',
-                                            error_code: errorSong?.error_code,
-                                            error_detail: errorSong?.error_detail,
-                                            message: item.error,
-                                            raw_message: JSON.stringify({
-                                              song_error: errorSong || null,
-                                              api_error: apiError || null
-                                            }, null, 2)
-                                          }
-                                        });
-                                      }}
-                                      className="p-1 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-full transition-colors"
-                                      title="View Error Details"
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </button>
-                            </div>
-                                  <button
-                                    onClick={async () => {
-                                      try {
-                                        // Update current item to pending status
-                                        updateHistoryItem(item.id, { 
-                                          status: 'pending',
-                                          error: undefined,
-                                          timestamp: Date.now()
-                                        });
 
-                                        // Remove from processing tasks if present
-                                        setProcessingTasks(prev => {
-                                          const newSet = new Set(prev);
-                                          newSet.delete(item.id);
-                                          return newSet;
-                                        });
 
-                                        // Add to processing tasks
-                                        setProcessingTasks(prev => new Set(prev).add(item.id));
 
-                                        // Get voice type from tags or use default male
-                                        const isFemaleSinger = item.tags?.includes('female_vocals') ?? false;
-                                        const voiceTags = isFemaleSinger 
-                                          ? 'female_vocals,female_voice,female_singer'
-                                          : 'male_vocals,male_voice,male_singer';
-                                        const negativeTags = isFemaleSinger 
-                                          ? 'male_vocals,male_voice,male_singer'
-                                          : 'female_vocals,female_voice,female_singer';
 
-                                        // Call API with same parameters but correct voice tags
-                                        const response = await axios.post(
-                                          'https://api.piapi.ai/api/v1/task',
-                                          {
-                                            model: 'music-u',
-                                            task_type: 'generate_music',
-                                            input: {
-                                              prompt: item.prompt,
-                                              lyrics_type: 'user',
-                                              make_instrumental: false,
-                                              tags: voiceTags,
-                                              negative_tags: negativeTags
-                                            }
-                                          },
-                                          {
-                                            headers: {
-                                              'Authorization': `Bearer ${API_KEY}`,
-                                              'X-API-Key': API_KEY,
-                                              'Accept': 'application/json'
-                                            }
-                                          }
-                                        );
+                    
 
-                                        // Update task ID
-                                        const taskId = response.data.task_id;
-                                        updateHistoryItem(item.id, { taskId });
-
-                                      } catch (error) {
-                                        // If API call fails, update status back to failed
-                                        updateHistoryItem(item.id, {
-                                          status: 'failed',
-                                          error: getErrorMessage(error),
-                                          timestamp: Date.now()
-                                        });
-                                        setProcessingTasks(prev => {
-                                          const newSet = new Set(prev);
-                                          newSet.delete(item.id);
-                                          return newSet;
-                                        });
-                                      }
-                                    }}
-                                    className="ml-3 flex items-center gap-1 px-3 py-1.5 bg-red-100 hover:bg-red-200 
-                                      text-red-700 rounded-lg transition-colors"
-                                    title="Retry generation"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                    <span className="text-sm font-medium">Retry</span>
-                                  </button>
-                                </div>
-                        {item.error.includes('credit') && (
-                          <a 
-                            href="https://piapi.ai/account"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                                    className="text-sm text-red-600 hover:text-red-800 underline mt-2 inline-block"
-                          >
-                            Check Account Balance →
-                          </a>
-                        )}
+                    {item.status === 'pending' && !item.songs?.length && (
+                      <div className="mt-3 flex items-center justify-center p-4 bg-pink-50/50 rounded-lg border border-pink-100">
+                        <LoadingWave />
+                        <span className="ml-2 text-sm text-pink-600">
+                          Creating your love song...
+                        </span>
                       </div>
                     )}
+
+                    {item.status === 'failed' && item.error && (
+                      <div className="mt-3 p-4 bg-red-50 rounded-lg border border-red-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm text-red-700">{item.error}</p>
+                                    <button
+                                      onClick={() => {
+                                              // Debug logs
+                                              console.log('Full item:', item);
+                                              console.log('Error response:', item.error_response);
+                                              
+                                              // Get error details from the complete response
+                                              const errorSong = item.error_response?.data?.output?.songs?.[0];
+                                              const apiError = item.error_response?.data?.error;
+                                              
+                                              console.log('Error Song:', errorSong); // Debug log
+                                              
+                                              setErrorModalDetails({
+                                                isOpen: true,
+                                                details: {
+                                                  error_type: errorSong?.error_type || 'Unknown Error',
+                                                  error_code: errorSong?.error_code,
+                                                  error_detail: errorSong?.error_detail,
+                                                  message: item.error,
+                                                  raw_message: JSON.stringify({
+                                                    song_error: errorSong || null,
+                                                    api_error: apiError || null
+                                                  }, null, 2)
+                                                }
+                                              });
+                                            }}
+                                            className="p-1 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-full transition-colors"
+                                            title="View Error Details"
+                                      >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                        <button
+                                          onClick={async () => {
+                                            try {
+                                              // Update current item to pending status
+                                              updateHistoryItem(item.id, { 
+                                                status: 'pending',
+                                                error: undefined,
+                                                timestamp: Date.now()
+                                              });
+
+                                              // Remove from processing tasks if present
+                                              setProcessingTasks(prev => {
+                                                const newSet = new Set(prev);
+                                                newSet.delete(item.id);
+                                                return newSet;
+                                              });
+
+                                              // Add to processing tasks
+                                              setProcessingTasks(prev => new Set(prev).add(item.id));
+
+                                              // Get voice type from tags or use default male
+                                              const isFemaleSinger = item.tags?.includes('female_vocals') ?? false;
+                                              const voiceTags = isFemaleSinger 
+                                                ? 'female_vocals,female_voice,female_singer'
+                                                : 'male_vocals,male_voice,male_singer';
+                                              const negativeTags = isFemaleSinger 
+                                                ? 'male_vocals,male_voice,male_singer'
+                                                : 'female_vocals,female_voice,female_singer';
+
+                                              // Call API with same parameters but correct voice tags
+                                              const response = await axios.post(
+                                                'https://api.piapi.ai/api/v1/task',
+                                                {
+                                                  model: 'music-u',
+                                                  task_type: 'generate_music',
+                                                  input: {
+                                                    prompt: item.prompt,
+                                                    lyrics_type: 'user',
+                                                    make_instrumental: false,
+                                                    tags: voiceTags,
+                                                    negative_tags: negativeTags
+                                                  }
+                                                },
+                                                {
+                                                  headers: {
+                                                    'Authorization': `Bearer ${API_KEY}`,
+                                                    'X-API-Key': API_KEY,
+                                                    'Accept': 'application/json'
+                                                  }
+                                                }
+                                              );
+
+                                              // Update task ID
+                                              const taskId = response.data.task_id;
+                                              updateHistoryItem(item.id, { taskId });
+
+                                            } catch (error) {
+                                              // If API call fails, update status back to failed
+                                              updateHistoryItem(item.id, {
+                                                status: 'failed',
+                                                error: getErrorMessage(error),
+                                                timestamp: Date.now()
+                                              });
+                                              setProcessingTasks(prev => {
+                                                const newSet = new Set(prev);
+                                                newSet.delete(item.id);
+                                                return newSet;
+                                              });
+                                            }
+                                          }}
+                                          className="ml-3 flex items-center gap-1 px-3 py-1.5 bg-red-100 hover:bg-red-200 
+                                            text-red-700 rounded-lg transition-colors"
+                                          title="Retry generation"
+                                          >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                          </svg>
+                                          <span className="text-sm font-medium">Retry</span>
+                                        </button>
+                                      </div>
+                              {item.error.includes('credit') && (
+                                <a 
+                                  href="https://piapi.ai/account"
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                          className="text-sm text-red-600 hover:text-red-800 underline mt-2 inline-block"
+                                >
+                                  Check Account Balance →
+                                </a>
+                                        )}
+                              </div>
+                            )}
                           </div>
-                  </div>
-                ))}
+                      </div>
+                    ))}
               </div>
             </div>
           )}

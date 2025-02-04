@@ -16,12 +16,17 @@ export async function generateValentineLyrics(
       Style: ${type}
       Strict Requirements:
       - Must be under ${MAX_LYRICS_LENGTH} characters total
-      - Include exactly one verse and one chorus
+      - Include exactly two verses and two choruses
       - Keep it family-friendly and Valentine's themed
       - Make it emotional and meaningful
-      - Be brief but impactful
       - Focus on quality over quantity
       Format:
+      [Verse]
+      (4 lines max)
+
+      [Chorus]
+      (4 lines max)
+
       [Verse]
       (4 lines max)
 
@@ -32,7 +37,7 @@ export async function generateValentineLyrics(
       messages: [{ role: "user", content: prompt }],
       model: "gpt-3.5-turbo",
       temperature: 0.7,
-      max_tokens: 300,
+      max_tokens: 900,
       presence_penalty: 0.6,
       frequency_penalty: 0.2,
     });

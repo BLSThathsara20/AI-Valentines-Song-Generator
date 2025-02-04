@@ -30,7 +30,7 @@ export function StickyPlayer({ showClose = true }: StickyPlayerProps) {
       }
       audioRef.current.volume = volume;
     }
-  }, [isPlaying, currentSong?.url, volume]);
+  }, [isPlaying, currentSong?.url, volume, setIsPlaying]);
 
   // Handle time updates
   const handleTimeUpdate = () => {
@@ -75,6 +75,55 @@ export function StickyPlayer({ showClose = true }: StickyPlayerProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Update the close button handler to set isPlaying to false
+  const handleClose = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0; // Reset the time
+    }
+    
+    // First set playing state to false
+    setIsPlaying(false);
+    
+    // Notify about state change before removing the song
+    if (currentSong?.url) {
+      window.dispatchEvent(new CustomEvent('audioStateChange', {
+        detail: { isPlaying: false, url: currentSong.url }
+      }));
+    }
+    
+    // Finally remove the current song
+    setCurrentSong(null);
+  };
+
+  // Update the play/pause handler to properly manage state
+  const handlePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        audioRef.current.play()
+          .then(() => {
+            setIsPlaying(true);
+            // Dispatch custom event to notify other players
+            window.dispatchEvent(new CustomEvent('audioStateChange', {
+              detail: { isPlaying: true, url: currentSong?.url }
+            }));
+          })
+          .catch(error => {
+            console.error('Error playing audio:', error);
+            setIsPlaying(false);
+          });
+      }
+    }
+  };
+
+  // Add handler for audio ended event
+  const handleAudioEnded = () => {
+    setIsPlaying(false);
+  };
+
   if (!currentSong) return null;
 
   return (
@@ -108,7 +157,7 @@ export function StickyPlayer({ showClose = true }: StickyPlayerProps) {
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={handlePlayPause}
               className="w-12 h-12 flex items-center justify-center rounded-full bg-pink-500 text-white hover:bg-pink-600 transition-colors shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
             >
               {isPlaying ? (
@@ -157,7 +206,7 @@ export function StickyPlayer({ showClose = true }: StickyPlayerProps) {
 
             {showClose && (
               <button
-                onClick={() => setCurrentSong(null)}
+                onClick={handleClose}
                 className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <XMarkIcon className="w-6 h-6" />
@@ -171,11 +220,13 @@ export function StickyPlayer({ showClose = true }: StickyPlayerProps) {
         ref={audioRef}
         src={currentSong.url}
         onTimeUpdate={handleTimeUpdate}
-        onEnded={() => setIsPlaying(false)}
+        onEnded={handleAudioEnded}
         onError={(e) => {
           console.error('Audio error:', e);
           setIsPlaying(false);
         }}
+        onPause={() => setIsPlaying(false)}
+        onPlay={() => setIsPlaying(true)}
       />
     </div>
   );

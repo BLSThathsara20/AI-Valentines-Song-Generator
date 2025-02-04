@@ -31,9 +31,6 @@ export function GenerationLoadingModal({
       onEmailSubmit(email);
       setIsValid(true);
       setShowSuccess(true);
-      setTimeout(() => {
-        setShowSuccess(false);
-      }, 2000);
     } else {
       setIsValid(false);
     }
@@ -59,14 +56,16 @@ export function GenerationLoadingModal({
         <div className="h-2 bg-gradient-to-r from-pink-500 via-red-500 to-pink-500 animate-gradient-x" />
         
         <div className="p-6">
-          <div className="text-center mb-6">
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Creating Your Love Song</h3>
-            <p className="text-sm text-gray-600">
-              Want to be notified when your song is ready? Enter your email below!
-            </p>
-          </div>
+          {!showSuccess && (
+            <div className="text-center mb-6">
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Creating Your Love Song</h3>
+              <p className="text-sm text-gray-600">
+                Want to be notified when your song is ready? Enter your email below!
+              </p>
+            </div>
+          )}
 
-          {showSuccess ? (
+          {showSuccess && (
             <div className="text-center py-4 animate-fade-in">
               <div className="text-green-500 mb-2">
                 <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -74,9 +73,18 @@ export function GenerationLoadingModal({
                 </svg>
               </div>
               <p className="text-gray-800 font-medium">Email saved successfully!</p>
-              <p className="text-gray-600 text-sm">We'll notify you when your song is ready.</p>
+              <p className="text-gray-600 text-sm">We'll notify you when your song is ready at your given email.</p>
+              <div className="flex justify-center mt-4">
+                <svg className="w-8 h-8 text-pink-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-2v13" />
+                  <circle cx="6" cy="18" r="3" />
+                  <circle cx="18" cy="16" r="3" />
+                </svg>
+              </div>
             </div>
-          ) : (
+          )}
+
+          {!showSuccess && (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -98,6 +106,10 @@ export function GenerationLoadingModal({
                   <p className="mt-1 text-sm text-red-500">Please enter a valid email address</p>
                 )}
               </div>
+
+              <p className="text-xs text-gray-500 mt-2">
+                By providing your email, you agree to receive notifications about your song status.
+              </p>
 
               <button
                 type="submit"

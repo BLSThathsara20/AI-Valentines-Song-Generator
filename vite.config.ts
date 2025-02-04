@@ -4,7 +4,6 @@ import path from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: '/lyrics-to-song/',
   plugins: [react()],
   server: {
     port: 5173,

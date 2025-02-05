@@ -1,6 +1,8 @@
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import MusicGenerator from './components/MusicGenerator';
 import { SongPlayerPage } from './components/SongPlayerPage';
+import { ModelTestPage } from './components/ModelTestPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalErrorHandler } from './components/GlobalErrorHandler';
 import { ErrorLoggerProvider } from './components/ErrorLoggerProvider';
@@ -10,6 +12,7 @@ function App() {
   return (
     <ErrorLoggerProvider>
       <GlobalErrorHandler />
+      <Toaster position="top-center" />
       <ErrorBoundary>
         <Router>
           <Routes>
@@ -21,6 +24,7 @@ function App() {
               </div>
             } />
             <Route path="/play/:songId" element={<SongPlayerPage />} />
+            <Route path="/model-test" element={<ModelTestPage />} />
           </Routes>
         </Router>
       </ErrorBoundary>

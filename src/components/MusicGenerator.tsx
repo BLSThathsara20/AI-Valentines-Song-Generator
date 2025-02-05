@@ -24,12 +24,17 @@ import { SongStatusNotifier } from './SongStatusNotifier';
 import { sendSMS } from '../services/smsService';
 import { SMSShareModal } from './SMSShareModal';
 import SongGenerationFunction from './SongGenerationFunction';
+import { FacebookShareModal } from './FacebookShareModal';
+import WelcomeBanner from '../assets/images/welcome-banner.png';
 
 const API_KEY = import.meta.env.VITE_SUNO_API_KEY;
 const HISTORY_KEY = 'music_generation_history';
 const EMAIL_STORAGE_KEY = 'valentine_notification_email';
 const TASKS_STORAGE_KEY = 'valentine_tasks_status';
 const PHONE_STORAGE_KEY = 'valentine_phone_number';
+
+// Add max songs per user from environment variable
+const MAX_SONGS_PER_USER = import.meta.env.VITE_MAX_SONGS_PER_USER ? parseInt(import.meta.env.VITE_MAX_SONGS_PER_USER) : 2;
 
 console.log('API Key loaded:', API_KEY ? 'Yes' : 'No');
 
@@ -42,26 +47,19 @@ const MAINTENANCE_MESSAGE = import.meta.env.VITE_MAINTENANCE_MESSAGE || "System 
 
 const GENRE_OPTIONS = [
   { value: 'pop', label: 'Pop' },
-  { value: 'rock', label: 'Rock' },
   { value: 'r&b', label: 'R&B' },
   { value: 'hip-hop', label: 'Hip Hop' },
   { value: 'jazz', label: 'Jazz' },
-  { value: 'classical', label: 'Classical' },
-  { value: 'electronic', label: 'Electronic' }
+  { value: 'classical', label: 'Classical' }
 ];
 
 const MOOD_OPTIONS = [
   { value: 'happy', label: 'Happy' },
   { value: 'sad', label: 'Sad' },
-  { value: 'energetic', label: 'Energetic' },
-  { value: 'calm', label: 'Calm' },
   { value: 'romantic', label: 'Romantic' },
-  { value: 'melancholic', label: 'Melancholic' }
 ];
 
 const ERA_OPTIONS = [
-  { value: '1970s', label: '70s' },
-  { value: '1980s', label: '80s' },
   { value: '1990s', label: '90s' },
   { value: '2000s', label: '2000s' },
   { value: '2010s', label: '2010s' },
@@ -77,8 +75,8 @@ const PROMPT_TYPES = [
 
 const MIN_LYRICS_CHARS = 25;
 const MAX_LYRICS_CHARS = 900;
-const MAX_HISTORY_ITEMS = 5;
-const MAX_SONGS_LIMIT = 5;
+const MAX_HISTORY_ITEMS = MAX_SONGS_PER_USER;
+const MAX_SONGS_LIMIT = MAX_SONGS_PER_USER;
 
 // Move type definition outside (this is fine)
 type PreviewData = {
@@ -521,6 +519,12 @@ const getSongUrl = (path: string) => {
   return `${window.location.origin}${BASE_URL}${cleanPath}`;
 };
 
+// Add this type for notification details
+interface NotificationDetails {
+  email: string;
+  phone: string;
+}
+
 export default function MusicGenerator() {
   const [previewData, setPreviewData] = useState<PreviewData>({ isOpen: false });
   const [prompt, setPrompt] = useState('');
@@ -570,6 +574,8 @@ export default function MusicGenerator() {
   const [selectedSong, setSelectedSong] = useState<{ title: string; url: string } | null>(null);
   // Add state to manage expanded state
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [notificationDetails, setNotificationDetails] = useState<NotificationDetails | null>(null);
+  const [showFacebookShare, setShowFacebookShare] = useState(false);
 
   // Add this computed value
   const hasReachedLimit = history.length >= MAX_SONGS_LIMIT;
@@ -795,12 +801,10 @@ export default function MusicGenerator() {
               title={song.title}
               tags={song.tags.slice(0, 3)}
               onPlay={(songData) => {
-                // If there's no current song (was closed) or it's a different song
                 if (!currentSong || currentSong.url !== songUrl) {
                   setCurrentSong(songData);
                   setIsPlaying(true);
                 } else {
-                  // If it's the same song, just toggle play state
                   setIsPlaying(!isPlaying);
                 }
               }}
@@ -808,6 +812,35 @@ export default function MusicGenerator() {
               isCurrentSong={currentSong?.url === songUrl}
             />
             <div className="px-4 pb-3 flex justify-end gap-2 border-t border-pink-50 pt-2">
+              <button
+                onClick={async () => {
+                  try {
+                    const link = document.createElement('a');
+                    link.href = songUrl;
+                    // Format the song title for the download
+                    const formattedTitle = song.title 
+                      ? `honor-valentine-song-${song.title.toLowerCase().replace(/\s+/g, '-')}` 
+                      : 'honor-valentine-song';
+                    link.download = `${formattedTitle}.mp3`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  } catch (error) {
+                    console.error('Download failed:', error);
+                    setNotification({
+                      type: 'error',
+                      message: 'Failed to download song. Please try again.',
+                      duration: 3000
+                    });
+                  }
+                }}
+                className="p-2 text-gray-600 hover:text-purple-500 hover:bg-purple-50 rounded-full transition-colors"
+                title="Download Song"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              </button>
               <button
                 onClick={() => {
                   setShareableSong({
@@ -845,12 +878,27 @@ export default function MusicGenerator() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </button>
+              <button
+                onClick={() => {
+                  setShareableSong({
+                    title: song.title,
+                    url: songUrl
+                  });
+                  setShowFacebookShare(true);
+                }}
+                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                title="Share on Facebook"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
       );
     };
-  }, [currentSong?.url, isPlaying, setCurrentSong, setIsPlaying, setShareableSong, setShowEmailShare, setShowWhatsAppShare]);
+  }, [currentSong?.url, isPlaying, setCurrentSong, setIsPlaying, setShareableSong, setShowEmailShare, setShowWhatsAppShare, setShowFacebookShare]);
 
   // Add new state for tracking tasks
   const [taskStatuses, setTaskStatuses] = useState<TaskStatus[]>(() => {
@@ -899,32 +947,45 @@ export default function MusicGenerator() {
       return;
     }
 
+    // Check if we've reached the song limit
+    if (history.length >= MAX_SONGS_LIMIT) {
+      setNotification({
+        type: 'warning',
+        message: 'Maximum song limit reached. Please delete some songs to generate more.',
+        duration: 5000
+      });
+      return;
+    }
+
     // Set generating state to true at the start
     setIsGenerating(true);
 
     try {
-      // Get voice type and build tags/negative tags
-      const isFemaleSinger = selectedOptions.voiceType === 'female';
-      const voiceTags = isFemaleSinger 
-        ? 'female_vocals,female_voice,female_singer'
-        : 'male_vocals,male_voice,male_singer';
-      const negativeTags = isFemaleSinger 
-        ? 'male_vocals,male_voice,male_singer'
-        : 'female_vocals,female_voice,female_singer';
+    // Get voice type and build tags/negative tags
+    const isFemaleSinger = selectedOptions.voiceType === 'female';
+    const voiceTags = isFemaleSinger 
+      ? 'female_vocals,female_voice,female_singer'
+      : 'male_vocals,male_voice,male_singer';
+    const negativeTags = isFemaleSinger 
+      ? 'male_vocals,male_voice,male_singer'
+      : 'female_vocals,female_voice,female_singer';
 
-      const requestData = {
-        model: 'music-u',
-        task_type: 'generate_music',
-        input: {
-          gpt_description_prompt: `${selectedOptions.voiceType}, ${selectedOptions.genre}, ${selectedOptions.mood}, ${selectedOptions.era}`,
-          lyrics_type: 'user',
-          make_instrumental: false,
-          negative_tags: negativeTags,
-          prompt: prompt,
-          seed: Math.floor(Math.random() * 1000000),
-          tags: voiceTags
-        }
-      };
+      // Append "Song by Honor" to the prompt
+      const finalPrompt = `${prompt.trim()}\n\nSong by Honor`;
+
+    const requestData = {
+      model: 'music-u',
+      task_type: 'generate_music',
+      input: {
+        gpt_description_prompt: `${selectedOptions.voiceType}, ${selectedOptions.genre}, ${selectedOptions.mood}, ${selectedOptions.era}`,
+        lyrics_type: 'user',
+        make_instrumental: false,
+        negative_tags: negativeTags,
+          prompt: finalPrompt,
+        seed: Math.floor(Math.random() * 1000000),
+        tags: voiceTags
+      }
+    };
 
       const startTime = Date.now();
 
@@ -961,11 +1022,6 @@ export default function MusicGenerator() {
         duration: 5000
       });
 
-      setCurrentSongDetails({
-        prompt: prompt,
-        status: 'pending'
-      });
-
       // Initialize new task in storage
       const savedTasks = JSON.parse(localStorage.getItem(TASKS_STORAGE_KEY) || '[]');
       const newTask = {
@@ -993,13 +1049,9 @@ export default function MusicGenerator() {
       });
 
       logError(`Music Generation Error: ${error}`);
-      
-      // Set generating state back to false on error
-      setIsGenerating(false);
-    } finally {
-      // Set generating state back to false after task is initialized
       setIsGenerating(false);
     }
+    // Remove the finally block since we'll handle isGenerating in checkTaskStatus
   };
 
   const generateLyrics = async () => {
@@ -1102,7 +1154,7 @@ export default function MusicGenerator() {
       model: "music-u",
       task_type: "generate_music",
       input: {
-        prompt: `[Verse]\n${prompt}`,
+        prompt: `[Verse]\n${prompt.trim()}\n\nSong by Honor`,
         lyrics_type: "user",
         gpt_description_prompt: descriptionParts.join(', '),
         tags: voiceTags,
@@ -1247,8 +1299,10 @@ export default function MusicGenerator() {
   const checkTaskStatus = async (taskId: string) => {
     try {
       const response = await fetchTaskDetails(taskId);
+      const status = response?.data?.status;
+      const songs = response?.data?.output?.songs;
 
-      if (response?.status === 'completed' && response?.output?.songs?.length > 0) {
+      if (status === 'completed' && songs?.length > 0) {
         const newProcessingTasks = new Set(processingTasks);
         newProcessingTasks.delete(taskId);
         setProcessingTasks(newProcessingTasks);
@@ -1264,7 +1318,7 @@ export default function MusicGenerator() {
                 ...item, 
                 status: 'completed',
                 completedAt: Date.now(),
-                songs: response.output.songs,
+                songs: songs,
                 notificationSent: false
               }
             : item
@@ -1273,77 +1327,62 @@ export default function MusicGenerator() {
         localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
         setHistory(updatedHistory);
 
-        const storedEmail = localStorage.getItem(EMAIL_STORAGE_KEY);
-        const storedPhone = localStorage.getItem(PHONE_STORAGE_KEY);
-        const songUrl = response.output.songs[0]?.song_path || '';
-        const songTitle = response.output.songs[0]?.title || 'Your Valentine Song';
-
-        // Send notifications
-        try {
-          // Send email notification
-          if (storedEmail) {
-            console.log("Notification sent triggered");
-            const emailData = {
-              to_email: storedEmail,
-              user_name: "Music Lover",
-              message: "Here's your Valentine's song!",
-              title: songTitle,
-              status: 'completed',
-              url: songUrl
-            };
+        // Send only email notification if we have contact details
+        if (notificationDetails) {
+          try {
+            const songTitle = songs[0]?.title || 'Love Song';
+            const songUrl = getSongUrl(songs[0]?.song_path || '');
 
             await emailjs.send(
               import.meta.env.VITE_EMAILJS_SERVICE_ID,
               import.meta.env.VITE_EMAILJS_SONG_STATUS_TEMPLATE_ID,
-              emailData,
+              {
+                to_email: notificationDetails.email,
+                user_name: "Music Lover",
+                message: "Your Valentine's song is ready!",
+                title: songTitle,
+                status: 'completed',
+                url: songUrl
+              },
               import.meta.env.VITE_EMAILJS_PUBLIC_KEY
             );
-          }
 
-          // Send SMS notification
-          if (storedPhone) {
-            const smsMessage = `Your Valentine's song "${songTitle}" is ready! 💝\nListen here: ${window.location.origin}${songUrl}`;
-            await sendSMS(storedPhone, smsMessage);
-          }
-
-          // Update history to mark notification as sent
-          const historyWithNotification = updatedHistory.map(item => 
-            item.id === taskId 
-              ? { ...item, notificationSent: true }
-              : item
-          );
-          localStorage.setItem(HISTORY_KEY, JSON.stringify(historyWithNotification));
-          setHistory(historyWithNotification);
-
-          playSuccessSound();
           setNotification({
             type: 'success',
-            message: 'Song completed and notifications sent! 🎵',
-            duration: 3000
+              message: 'Song completed! Check your email and phone for the link.',
+              duration: 5000
           });
+
+            playSuccessSound();
         } catch (error) {
-          console.error('Failed to send notifications:', error);
+            console.error('Failed to send email notification:', error);
           setNotification({
-            type: 'error',
-            message: 'Failed to send notifications. Please check your contact info.',
-            duration: 3000
-          });
+              type: 'warning',
+              message: 'Song ready but email notification failed. Please check history.',
+              duration: 5000
+            });
+          }
         }
-      } else if (response?.status === 'failed') {
+      } else if (status === 'failed') {
         const newProcessingTasks = new Set(processingTasks);
         newProcessingTasks.delete(taskId);
         setProcessingTasks(newProcessingTasks);
-        
-        if (newProcessingTasks.size === 0) {
           setIsGenerating(false);
-        }
+        
+        setNotification({
+          type: 'error',
+          message: 'Failed to generate song. Please try again.',
+          duration: 5000
+        });
       }
     } catch (error) {
+      console.error('Error checking task status:', error);
       setNotification({
         type: 'error',
         message: 'Error checking task status',
         duration: 3000
       });
+      setIsGenerating(false);
     }
   };
 
@@ -1365,16 +1404,21 @@ export default function MusicGenerator() {
   // Add this effect to handle page leave warning
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isGenerating || processingTasks.size > 0) {
+      // Check if there are any pending generations
+      const hasPendingGenerations = history.some(item => item.status === 'pending');
+      
+      if (hasPendingGenerations) {
+        // Show warning message
+        const message = "You have pending song generations in progress. If you leave now, you'll still receive notifications when they're ready. Are you sure you want to leave?";
         e.preventDefault();
-        e.returnValue = 'Song generation in progress. Are you sure you want to leave?';
-        return e.returnValue;
+        e.returnValue = message;
+        return message;
       }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isGenerating, processingTasks]);
+  }, [history]);
 
   // Update the playSuccessSound function to handle notification
   const playSuccessSound = async () => {
@@ -1471,7 +1515,7 @@ export default function MusicGenerator() {
             localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
             setHistory(updatedHistory);
 
-            console.log('✅ 11111Notification sent for song:', item.id);
+            console.log('✅ Notification sent for song:', item.id);
             
             setNotification({
               type: 'success',
@@ -1556,6 +1600,7 @@ export default function MusicGenerator() {
   const handleCaptchaSuccess = () => {
     setShowCaptcha(false);
     setShowHearts(true);
+    setShowInfoModal(true); // Show info modal after captcha
     setTimeout(() => setShowHearts(false), 8000); // Hide hearts after 8 seconds
   };
 
@@ -1585,6 +1630,64 @@ export default function MusicGenerator() {
     });
   };
 
+  // Add this function to handle notification details submission
+  const handleNotificationDetailsSubmit = (details: NotificationDetails) => {
+    setNotificationDetails(details);
+    localStorage.setItem(EMAIL_STORAGE_KEY, details.email);
+    localStorage.setItem(PHONE_STORAGE_KEY, details.phone);
+  };
+
+  // Add this effect to check and send notifications
+  useEffect(() => {
+    const checkAndSendNotifications = async () => {
+      // Get current history from localStorage
+      const currentHistory = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      
+      // Find completed songs that haven't been notified
+      const pendingNotifications = currentHistory.filter((item) => 
+        item.status === 'completed' && 
+        item.songs?.length > 0 && 
+        !item.notificationSent
+      );
+
+      // Send notifications for each pending item
+      for (const item of pendingNotifications) {
+        try {
+          const storedPhone = localStorage.getItem(PHONE_STORAGE_KEY);
+          if (!storedPhone) continue;
+
+          console.log('Sending SMS notification for song:', item.id);
+          
+          // Send SMS notification
+          await sendSMS(
+            storedPhone,
+            `Your Valentine's song is ready! Visit ${window.location.origin} to send it to your loved one. (Honor Valentine's gift)`
+          );
+
+          // Update history to mark notification as sent
+          const updatedHistory = currentHistory.map((historyItem) => 
+            historyItem.id === item.id 
+              ? { ...historyItem, notificationSent: true }
+              : historyItem
+          );
+
+          // Save to localStorage and update state
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
+          setHistory(updatedHistory);
+
+          console.log('✅ SMS notification sent for song:', item.id);
+        } catch (error) {
+          console.error('Failed to send SMS notification for song:', item.id, error);
+        }
+      }
+    };
+
+    // Set up interval to check for notifications
+    const interval = setInterval(checkAndSendNotifications, 5000);
+
+    return () => clearInterval(interval);
+  }, []); // Empty dependency array means this runs once on mount
+
   return (
     <>
       <ProcessingStatus processingCount={processingTasks.size} />
@@ -1608,26 +1711,16 @@ export default function MusicGenerator() {
               />
               
               <div className="max-w-2xl mx-auto w-full">
-                <div className="text-center mb-6 md:mb-8 relative">
-                  <button
-                    onClick={() => setShowInfoModal(true)}
-                    className="absolute right-0 top-0 text-gray-500 hover:text-pink-500 transition-colors"
-                    title="How it works"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </button>
-                  <h1 className="text-3xl md:text-4xl font-bold text-red-600 mb-2 flex items-center justify-center gap-2">
-                    <HeartIcon className="w-6 h-6 md:w-8 md:h-8" />
-                    <span className="hidden md:inline">Valentine's Song Generator</span>
-                    <span className="md:hidden">Love Song Maker</span>
-                    <HeartIcon className="w-6 h-6 md:w-8 md:h-8" />
-                  </h1>
-                  <p className="text-sm md:text-base text-gray-600">Create your perfect Valentine's Day song</p>
-                </div>
+                {/* Welcome Banner */}
+                <div className="w-full mb-8 -mt-4">
+                  <img 
+                    src={WelcomeBanner} 
+                    alt="Welcome Banner" 
+                    className="w-full object-cover animate-fade-in rounded-xl"
+                  />
+                      </div>
 
-<SongGenerationFunction
+                <SongGenerationFunction
                   selectedOptions={selectedOptions}
                   handleSelectChange={handleSelectChange}
                   showLyricsInput={showLyricsInput}
@@ -1657,17 +1750,17 @@ export default function MusicGenerator() {
                 />
                 
 
-                {/* History Section */}
-                {history.length > 0 && (
+          {/* History Section */}
+          {history.length > 0 && (
                   <div className="mt-8">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                           <HeartIcon className="w-6 h-6 text-pink-500" />
-                          Love Songs History
+                          Completed Songs
                         </h3>
                         <span className="px-2 py-1 bg-pink-100 text-pink-600 rounded-full text-sm">
-                          {history.length}/{MAX_HISTORY_ITEMS} Songs
+                          {history.length}/{MAX_HISTORY_ITEMS}
                     </span>
                   </div>
                       {history.length > 1 && (
@@ -1682,7 +1775,6 @@ export default function MusicGenerator() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
-                          Clear All
                 </button>
                       )}
               </div>
@@ -1785,7 +1877,7 @@ export default function MusicGenerator() {
                       <div className="mt-3 flex items-center justify-center p-4 bg-pink-50/50 rounded-lg border border-pink-100">
                         <LoadingWave />
                         <span className="ml-2 text-sm text-pink-600">
-                          Creating your love song...
+                        Your love song is being created...
                         </span>
                       </div>
                     )}
@@ -1964,12 +2056,19 @@ export default function MusicGenerator() {
                   localStorage.setItem(EMAIL_STORAGE_KEY, email);
                   setNotification({
                     type: 'success',
-                    message: 'Email saved successfully! 📧',
+                    message: 'Contact details saved! 📧',
                     duration: 3000
                   });
                 }}
                 defaultEmail={localStorage.getItem(EMAIL_STORAGE_KEY) || ''}
                 isGenerating={isGenerating}
+                onNotificationDetailsSubmit={handleNotificationDetailsSubmit}
+              />
+              <FacebookShareModal 
+                isOpen={showFacebookShare}
+                onClose={() => setShowFacebookShare(false)}
+                songTitle={shareableSong?.title || ''}
+                songUrl={shareableSong?.url || ''}
               />
       </div>
           )}

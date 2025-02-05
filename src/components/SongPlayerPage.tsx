@@ -116,6 +116,13 @@ export function SongPlayerPage() {
 
       <div className="container mx-auto px-4 py-12 relative">
         <div className="max-w-3xl mx-auto text-center">
+          {/* Honor Logo */}
+          <img 
+            src="/HonorLogo.png" 
+            alt="Honor Logo" 
+            className="h-16 mx-auto mb-8 animate-fade-in"
+          />
+          
           <HeartIcon className="w-16 h-16 text-pink-500 mx-auto mb-6 animate-pulse" />
           <h1 className="text-4xl font-bold text-gray-900 mb-4 animate-fade-in">
             Your Special Love Song
@@ -197,14 +204,45 @@ export function SongPlayerPage() {
                 ))}
               </div>
 
-              <Link 
-                to="/"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-pink-500 text-white rounded-full
-                  hover:bg-pink-600 transition-all duration-300 hover:scale-105 shadow-lg"
-              >
-                <HeartIcon className="w-6 h-6" />
-                Create Your Own Love Song
-              </Link>
+              <div className="flex items-center justify-center gap-4">
+                <Link 
+                  to="/"
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-pink-500 text-white rounded-full
+                    hover:bg-pink-600 transition-all duration-300 hover:scale-105 shadow-lg"
+                >
+                  <HeartIcon className="w-6 h-6" />
+                  Create Your Own Love Song
+                </Link>
+
+                <button
+                  onClick={() => {
+                    if (currentSong?.url) {
+                      try {
+                        const link = document.createElement('a');
+                        link.href = currentSong.url;
+                        // Format the song title for the download
+                        const formattedTitle = currentSong.title 
+                          ? `honor-valentine-song-${currentSong.title.toLowerCase().replace(/\s+/g, '-')}` 
+                          : 'honor-valentine-song';
+                        link.download = `${formattedTitle}.mp3`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      } catch (error) {
+                        console.error('Download failed:', error);
+                        setError('Failed to download song. Please try again.');
+                      }
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-white text-pink-500 rounded-full
+                    hover:bg-pink-50 border-2 border-pink-500 transition-all duration-300 hover:scale-105 shadow-lg"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download Song
+                </button>
+              </div>
             </div>
           )}
 

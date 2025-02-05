@@ -3,6 +3,9 @@ import { HeartIcon, SparklesIcon, ChevronUpIcon } from '@heroicons/react/24/outl
 import { LoadingWave } from './';
 import { StyleOption } from './StyleOption';
 
+// Add environment variable for max songs
+const MAX_SONGS_PER_USER = import.meta.env.VITE_MAX_SONGS_PER_USER ? parseInt(import.meta.env.VITE_MAX_SONGS_PER_USER) : 2;
+
 interface SongGenerationFunctionProps {
   selectedOptions: {
     voiceType: string;
@@ -36,7 +39,6 @@ interface SongGenerationFunctionProps {
   handlePreviewClick: () => void;
   MIN_LYRICS_CHARS: number;
   MAX_LYRICS_CHARS: number;
-  MAX_SONGS_LIMIT: number;
   GENRE_OPTIONS: Array<{ value: string; label: string }>;
   MOOD_OPTIONS: Array<{ value: string; label: string }>;
   ERA_OPTIONS: Array<{ value: string; label: string }>;
@@ -65,7 +67,6 @@ const SongGenerationFunction: React.FC<SongGenerationFunctionProps> = ({
   handlePreviewClick,
   MIN_LYRICS_CHARS,
   MAX_LYRICS_CHARS,
-  MAX_SONGS_LIMIT,
   GENRE_OPTIONS,
   MOOD_OPTIONS,
   ERA_OPTIONS,
@@ -89,19 +90,91 @@ const SongGenerationFunction: React.FC<SongGenerationFunctionProps> = ({
     <div className="bg-white rounded-xl shadow-xl overflow-hidden mb-4">
       {/* Accordion Header */}
       <div 
-        className="p-4 flex items-center justify-between cursor-pointer bg-gradient-to-r from-pink-50 to-red-50 hover:from-pink-100 hover:to-red-100 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
+        className={`
+          relative overflow-hidden cursor-pointer
+          bg-gradient-to-r from-pink-50 via-red-50 to-pink-50
+          hover:from-pink-100 hover:via-red-100 hover:to-pink-100
+          transition-all duration-500 transform
+          ${isExpanded ? 'shadow-lg' : 'shadow-md hover:shadow-lg'}
+        `}
       >
-        <div className="flex items-center gap-2">
-          <HeartIcon className="w-6 h-6 text-pink-500" />
-          <h2 className="text-xl font-semibold text-gray-800">
-            Generate your song {history.length > 0 && `(${history.length} songs created)`}
-          </h2>
+        {/* Animated background effect */}
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute inset-0 bg-gradient-to-r from-pink-400 to-red-400 animate-gradient-x" />
+          {[...Array(3)].map((_, i) => (
+            <HeartIcon
+              key={i}
+              className="absolute text-pink-500 animate-float-slow"
+              style={{
+                right: `${i * 25}%`,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '24px',
+                height: '24px',
+                animationDelay: `${i * 0.5}s`
+              }}
+            />
+          ))}
         </div>
-        <div className="text-gray-600 transition-transform duration-300" style={{
-          transform: isExpanded ? 'rotate(0deg)' : 'rotate(180deg)'
-        }}>
-          <ChevronUpIcon className="w-5 h-5" />
+
+        {/* Main content */}
+        <div className="relative p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              {/* Icon with pulse effect */}
+              <div className="relative">
+                <div className="absolute inset-0 bg-pink-500 rounded-full animate-ping opacity-20" />
+                <HeartIcon className="w-8 h-8 text-pink-500 relative z-10 animate-pulse" />
+              </div>
+              
+              {/* Text content */}
+              <div>
+                <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                  {history.length === 0 ? (
+                    <>
+                      Generate Your First Love Song
+                      <span className="animate-bounce">✨</span>
+                    </>
+                  ) : (
+                    <>
+                      Create Another Love Song
+                      <span className="animate-pulse">💝</span>
+                    </>
+                  )}
+                </h2>
+                {history.length > 0 && (
+                  <p className="text-sm text-gray-600 mt-1">
+                    {history.length === MAX_SONGS_PER_USER 
+                      ? "Maximum songs limit reached" 
+                      : `${history.length} of ${MAX_SONGS_PER_USER} songs created`}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Right side with chevron and message */}
+            <div className="flex items-center gap-3">
+              {history.length > 0 && !isExpanded && (
+                <div className="hidden md:flex items-center gap-2 text-pink-600 bg-pink-50 px-3 py-1.5 rounded-full">
+                  <SparklesIcon className="w-4 h-4" />
+                  <span className="text-sm font-medium">Create more songs</span>
+                </div>
+              )}
+              <div 
+                className={`
+                  w-8 h-8 rounded-full bg-pink-50 flex items-center justify-center
+                  transition-transform duration-300
+                  ${isExpanded ? 'rotate-0' : 'rotate-180'}
+                `}
+              >
+                <ChevronUpIcon className="w-5 h-5 text-pink-500" />
+              </div>
+            </div>
+          </div>
+
+          {/* Decorative bottom border */}
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-500 via-red-500 to-pink-500" />
         </div>
       </div>
 
@@ -239,7 +312,7 @@ const SongGenerationFunction: React.FC<SongGenerationFunctionProps> = ({
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
               <SparklesIcon className="w-5 h-5 text-pink-500" />
-              Step 2: Song Lyrics
+              Step 2: Write Your Lyrics
             </h2>
 
             {/* Main Lyrics Input */}
@@ -369,6 +442,33 @@ const SongGenerationFunction: React.FC<SongGenerationFunctionProps> = ({
                     </span>
                   )}
                 </label>
+                
+                {/* Lyrics Guidelines */}
+                <div className="mb-4 p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-pink-100">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <SparklesIcon className="w-4 h-4 text-pink-500" />
+                    Important Guidelines:
+                  </h4>
+                  <ul className="space-y-2 text-sm text-gray-600">
+                    <li className="flex items-start gap-2">
+                      <span className="text-pink-500 mt-0.5">•</span>
+                      <span>Do not include copyrighted lyrics or content from existing songs</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-pink-500 mt-0.5">•</span>
+                      <span>Avoid explicit, offensive, or inappropriate content</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-pink-500 mt-0.5">•</span>
+                      <span>Keep the lyrics personal and original to create a unique song</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-pink-500 mt-0.5">•</span>
+                      <span>Focus on expressing genuine emotions and feelings</span>
+                    </li>
+                  </ul>
+                </div>
+
                 <div className="relative">
                   <textarea
                     className="w-full p-4 border border-pink-100 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent min-h-[200px] shadow-sm bg-white/80 backdrop-blur-sm"
@@ -396,18 +496,14 @@ const SongGenerationFunction: React.FC<SongGenerationFunctionProps> = ({
 
           {/* Step 3: Generate Button */}
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <HeartIcon className="w-5 h-5 text-pink-500" />
-              Step 3: Create Your Song
-            </h2>
 
             <div className="flex gap-2">
               <button
                 onClick={generateMusic}
-                disabled={isGenerating || history.length >= MAX_SONGS_LIMIT}
+                disabled={isGenerating || history.length >= MAX_SONGS_PER_USER}
                 className={`w-full py-3 px-6 rounded-xl font-semibold text-white 
                   flex items-center justify-center gap-2 transition-all
-                  ${isGenerating || history.length >= MAX_SONGS_LIMIT 
+                  ${isGenerating || history.length >= MAX_SONGS_PER_USER 
                     ? 'bg-gray-400 cursor-not-allowed opacity-50' 
                     : 'bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 shadow-lg hover:shadow-xl'
                   }`}
@@ -417,9 +513,9 @@ const SongGenerationFunction: React.FC<SongGenerationFunctionProps> = ({
                     <LoadingWave />
                     Generating...
                   </>
-                ) : history.length >= MAX_SONGS_LIMIT ? (
+                ) : history.length >= MAX_SONGS_PER_USER ? (
                   <>
-                    <span>Song Limit Reached (5/5)</span>
+                    <span>Song Limit Reached ({MAX_SONGS_PER_USER}/{MAX_SONGS_PER_USER})</span>
                   </>
                 ) : (
                   <>
@@ -431,7 +527,7 @@ const SongGenerationFunction: React.FC<SongGenerationFunctionProps> = ({
               
               <button
                 onClick={handlePreviewClick}
-                className="px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                className="hidden px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
                 title="Preview Request/Response"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

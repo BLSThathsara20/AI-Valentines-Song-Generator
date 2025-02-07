@@ -31,11 +31,11 @@ export function SongStatusNotifier({
       }
 
       try {
-        console.log('Sending status notification:', {
-          status,
-          songId,
-          userEmail
-        });
+        // console.log('Sending status notification:', {
+        //   status,
+        //   songId,
+        //   userEmail
+        // });
 
         const emailData = {
           to_email: userEmail,
@@ -57,7 +57,7 @@ export function SongStatusNotifier({
           import.meta.env.VITE_EMAILJS_PUBLIC_KEY
         );
 
-        console.log('Status notification sent:', result);
+        // console.log('Status notification sent:', result);
         
         if (onNotificationSent) {
           onNotificationSent(songId);

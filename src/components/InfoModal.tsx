@@ -41,7 +41,7 @@ export function InfoModal({ isOpen, onClose }: InfoModalProps) {
             <div className="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-xl transition-all max-w-lg w-full animate-slide-up">
               <div className="p-4 md:p-6 max-w-lg w-full overflow-y-auto max-h-[90vh]">
                 <div className="text-center mb-6 md:mb-8">
-                  <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">Create your perfect Valentine's song in 3 easy steps!</h2>
+                  <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">Create your perfect Valentine's song in 2 easy steps!</h2>
                   <p className="text-sm md:text-base text-gray-600">How It Works</p>
                 </div>
 

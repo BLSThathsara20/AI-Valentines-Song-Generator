@@ -38,7 +38,7 @@ export function WhatsAppShareModal({ isOpen, onClose, songTitle, songUrl }: What
 
   // Base64 encode the song data
   const encodedData = btoa(JSON.stringify(songData));
-  const playPageUrl = `${window.location.origin}/lyrics-to-song/#/play/${encodedData}`;
+  const playPageUrl = `${window.location.origin}/#/play/${encodedData}`;
 
   const [message, setMessage] = useState(
     `Check out this Valentine's song I created: "${songTitle}"\n\n` +
@@ -53,12 +53,12 @@ export function WhatsAppShareModal({ isOpen, onClose, songTitle, songUrl }: What
       sender: "A Valentine's Friend"
     };
     const newEncodedData = btoa(JSON.stringify(newSongData));
-    const newPlayPageUrl = `${window.location.origin}/lyrics-to-song/#/play/${newEncodedData}`;
+    const newPlayPageUrl = `${window.location.origin}/#/play/${newEncodedData}`;
     
     setMessage(
       `🎵 Check out this Valentine's song I created: "${songTitle}"\n\n` +
       `Listen here: ${newPlayPageUrl}\n\n` +
-      `💝 Create your own Valentine's song at: ${window.location.origin}/lyrics-to-song/`
+      `💝 Create your own Valentine's song at: ${window.location.origin}/`
     );
   }, [songUrl, songTitle]);
 

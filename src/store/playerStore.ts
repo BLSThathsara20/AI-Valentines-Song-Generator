@@ -14,11 +14,11 @@ export const usePlayerStore = create<PlayerState>()((set) => ({
   currentSong: null,
   isPlaying: false,
   setCurrentSong: (song) => {
-    console.log('Setting current song:', song); // Debug log
+    // console.log('Setting current song:', song); // Debug log
     set({ currentSong: song });
   },
   setIsPlaying: (playing) => {
-    console.log('Setting isPlaying:', playing); // Debug log
+    // console.log('Setting isPlaying:', playing); // Debug log
     set({ isPlaying: playing });
   },
 })); 

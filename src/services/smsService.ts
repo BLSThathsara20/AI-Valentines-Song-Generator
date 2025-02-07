@@ -37,7 +37,7 @@ export const loginToSMSService = async (): Promise<string> => {
       throw new Error('SMS API credentials not configured');
     }
 
-    console.log('🔑 Attempting to login to SMS service...');
+    // console.log('🔑 Attempting to login to SMS service...');
 
     const response = await axios.post<LoginResponse>(
       `${SMS_API_BASE_URL}/v1/login`,
@@ -52,20 +52,20 @@ export const loginToSMSService = async (): Promise<string> => {
       }
     );
 
-    console.log('📡 SMS Login Response:', {
-      status: response.data.status,
-      comment: response.data.comment,
-      hasToken: !!response.data.token,
-      userData: {
-        id: response.data.userData?.id,
-        mobile: response.data.userData?.mobile,
-        email: response.data.userData?.email
-      }
-    });
+    // console.log('📡 SMS Login Response:', {
+    //   status: response.data.status,
+    //   comment: response.data.comment,
+    //   hasToken: !!response.data.token,
+    //   userData: {
+    //     id: response.data.userData?.id,
+    //     mobile: response.data.userData?.mobile,
+    //     email: response.data.userData?.email
+    //   }
+    // });
 
     if (response.data.status === 'success' && response.data.token) {
       authToken = response.data.token;
-      console.log('✅ Successfully logged in to SMS service');
+      // console.log('✅ Successfully logged in to SMS service');
       return response.data.token;
     }
 
@@ -87,7 +87,7 @@ export const sendSMS = async (phoneNumber: string, message: string): Promise<boo
 
     // If no auth token exists or it's expired, login again
     if (!authToken) {
-      console.log('🔄 No auth token found, logging in...');
+      // console.log('🔄 No auth token found, logging in...');
       authToken = await loginToSMSService();
     }
 
@@ -97,8 +97,8 @@ export const sendSMS = async (phoneNumber: string, message: string): Promise<boo
       ? formattedNumber 
       : `94${formattedNumber}`;
 
-    console.log('📱 Sending SMS to:', finalNumber);
-    console.log('📝 Message:', message);
+    // console.log('📱 Sending SMS to:', finalNumber);
+    // console.log('📝 Message:', message);
 
     const smsPayload = {
       msisdn: [{ mobile: finalNumber }],
@@ -108,7 +108,7 @@ export const sendSMS = async (phoneNumber: string, message: string): Promise<boo
       payment_method: "0"
     };
 
-    console.log('📦 SMS Request Payload:', smsPayload);
+    // console.log('📦 SMS Request Payload:', smsPayload);
 
     const response = await axios.post<SMSResponse>(
       `${SMS_API_BASE_URL}/v2/sms`,
@@ -121,25 +121,25 @@ export const sendSMS = async (phoneNumber: string, message: string): Promise<boo
       }
     );
 
-    console.log('📡 SMS API Response:', {
-      status: response.data.status,
-      message: response.data.message,
-      data: response.data.data
-    });
+    // console.log('📡 SMS API Response:', {
+    //   status: response.data.status,
+    //   message: response.data.message,
+    //   data: response.data.data
+    // });
 
     if (response.data.status === 'success') {
-      console.log('✅ SMS sent successfully');
+      // console.log('✅ SMS sent successfully');
       return true;
     }
 
     // If the token is expired, try to login again and resend
     if (response.data.message?.toLowerCase().includes('token')) {
-      console.log('🔄 Token expired, refreshing and retrying...');
+      // console.log('🔄 Token expired, refreshing and retrying...');
       authToken = await loginToSMSService();
       return sendSMS(phoneNumber, message);
     }
 
-    console.log('❌ Failed to send SMS:', response.data.message);
+    // console.log('❌ Failed to send SMS:', response.data.message);
     return false;
   } catch (error) {
     console.error('❌ SMS Sending Error:', error);
@@ -150,7 +150,7 @@ export const sendSMS = async (phoneNumber: string, message: string): Promise<boo
     // If it's an auth error, try to login again and resend
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       try {
-        console.log('🔄 Auth error, refreshing token and retrying...');
+        // console.log('🔄 Auth error, refreshing token and retrying...');
         authToken = await loginToSMSService();
         return sendSMS(phoneNumber, message);
       } catch (retryError) {

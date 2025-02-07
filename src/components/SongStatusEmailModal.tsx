@@ -40,7 +40,7 @@ export function SongStatusEmailModal({ isOpen, onClose, songDetails }: SongStatu
       cc: ""
     };
 
-    console.log('Sending email notification:', emailData);
+    // console.log('Sending email notification:', emailData);
 
     try {
       const result = await emailjs.send(
@@ -50,11 +50,11 @@ export function SongStatusEmailModal({ isOpen, onClose, songDetails }: SongStatu
         import.meta.env.VITE_EMAILJS_PUBLIC_KEY
       );
 
-      console.log('Email sent successfully:', result);
+      // console.log('Email sent successfully:', result);
 
       if (!isTest) {
         localStorage.setItem(EMAIL_STORAGE_KEY, email);
-        console.log('Notification email saved:', email);
+        // console.log('Notification email saved:', email);
       }
 
       if (!isTest) onClose();

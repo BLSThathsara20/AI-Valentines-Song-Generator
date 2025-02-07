@@ -112,10 +112,6 @@ export function ValentineCaptcha({ isOpen, onSuccess }: { isOpen: boolean; onSuc
                   </button>
                 ))}
               </div>
-
-              <p className="text-xs sm:text-sm text-gray-500 animate-fade-in-delay-2">
-                Click on the matching heart to continue
-              </p>
             </div>
           </div>
 

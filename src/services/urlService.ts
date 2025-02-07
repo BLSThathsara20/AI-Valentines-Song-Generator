@@ -9,7 +9,7 @@ interface SongData {
 // Function to create a shareable play URL
 export const createPlayUrl = (songData: SongData): string => {
   const encodedData = btoa(JSON.stringify(songData));
-  return `${window.location.origin}/lyrics-to-song/#/play/${encodedData}`;
+  return `${window.location.origin}/#/play/${encodedData}`;
 };
 
 // Function to shorten URL using TinyURL API

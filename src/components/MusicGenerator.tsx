@@ -36,7 +36,7 @@ const PHONE_STORAGE_KEY = 'valentine_phone_number';
 // Add max songs per user from environment variable
 const MAX_SONGS_PER_USER = import.meta.env.VITE_MAX_SONGS_PER_USER ? parseInt(import.meta.env.VITE_MAX_SONGS_PER_USER) : 2;
 
-console.log('API Key loaded:', API_KEY ? 'Yes' : 'No');
+// console.log('API Key loaded:', API_KEY ? 'Yes' : 'No');
 
 if (!API_KEY) {
   console.error('API key is missing. Please check your .env file');
@@ -280,7 +280,7 @@ function MaintenanceMessage() {
 // Update the BASE_URL constant to handle both development and production
 const BASE_URL = window.location.hostname === 'localhost' 
   ? '/' 
-  : '/lyrics-to-song/';
+  : '/';
 
 // Add this type
 type TaskStatus = {
@@ -299,7 +299,7 @@ const updateTaskStatus = (taskId: string, updates: Partial<TaskStatus>) => {
   );
   localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(updatedTasks));
   setTaskStatuses(updatedTasks);
-  console.log('Updated task status:', { taskId, updates, currentTasks: updatedTasks });
+  // console.log('Updated task status:', { taskId, updates, currentTasks: updatedTasks });
 };
 
 // Update the history item type to include notification status
@@ -322,11 +322,11 @@ const sendCompletionNotification = async (songId: string) => {
   if (!song || !storedEmail) return;
 
   try {
-    console.log('Manually sending completion notification for song:', {
-      songId,
-      email: storedEmail,
-      title: song.songs?.[0]?.title
-    });
+    // console.log('Manually sending completion notification for song:', {
+    //   songId,
+    //   email: storedEmail,
+    //   title: song.songs?.[0]?.title
+    // });
 
     const emailData = {
       to_email: storedEmail,
@@ -387,7 +387,7 @@ const checkAndSendNotifications = async () => {
   // Send notifications for each pending item
   for (const item of pendingNotifications) {
     try {
-      console.log('Sending notification for song:', item.id);
+      // console.log('Sending notification for song:', item.id);
       
       const emailData = {
         to_email: storedEmail
@@ -412,7 +412,7 @@ const checkAndSendNotifications = async () => {
         localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
         setHistory(updatedHistory);
 
-        console.log('✅ Notification sent for song:', item.id);
+        // console.log('✅ Notification sent for song:', item.id);
         
         setNotification({
           type: 'success',
@@ -1440,7 +1440,7 @@ export default function MusicGenerator() {
       const storedEmail = localStorage.getItem(EMAIL_STORAGE_KEY);
       if (storedEmail && currentSongDetails) {
         try {
-          console.log('Sending completion notification on success sound');
+          // console.log('Sending completion notification on success sound');
           const emailResult = await emailjs.send(
             import.meta.env.VITE_EMAILJS_SERVICE_ID,
             import.meta.env.VITE_EMAILJS_SONG_STATUS_TEMPLATE_ID,
@@ -1455,7 +1455,7 @@ export default function MusicGenerator() {
             import.meta.env.VITE_EMAILJS_PUBLIC_KEY
           );
 
-          console.log('✅ Completion notification sent on success:', emailResult);
+          // console.log('✅ Completion notification sent on success:', emailResult);
 
           // Update history to mark notification as sent
           const updatedHistory = history.map(item => 
@@ -1490,7 +1490,7 @@ export default function MusicGenerator() {
       // Send notifications for each pending item
       for (const item of pendingNotifications) {
         try {
-          console.log('Sending notification for song:', item.id);
+          // console.log('Sending notification for song:', item.id);
           
           const emailData = {
             to_email: storedEmail
@@ -1515,7 +1515,7 @@ export default function MusicGenerator() {
             localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
             setHistory(updatedHistory);
 
-            console.log('✅ Notification sent for song:', item.id);
+            // console.log('✅ Notification sent for song:', item.id);
             
             setNotification({
               type: 'success',
@@ -1656,7 +1656,7 @@ export default function MusicGenerator() {
           const storedPhone = localStorage.getItem(PHONE_STORAGE_KEY);
           if (!storedPhone) continue;
 
-          console.log('Sending SMS notification for song:', item.id);
+          // console.log('Sending SMS notification for song:', item.id);
           
           // Send SMS notification
           await sendSMS(
@@ -1675,7 +1675,7 @@ export default function MusicGenerator() {
           localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
           setHistory(updatedHistory);
 
-          console.log('✅ SMS notification sent for song:', item.id);
+          // console.log('✅ SMS notification sent for song:', item.id);
         } catch (error) {
           console.error('Failed to send SMS notification for song:', item.id, error);
         }
@@ -1752,7 +1752,7 @@ export default function MusicGenerator() {
 
           {/* History Section */}
           {history.length > 0 && (
-                  <div className="mt-8">
+                  <div className="mt-8 mb-8">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
@@ -1890,14 +1890,14 @@ export default function MusicGenerator() {
                                     <button
                                       onClick={() => {
                                               // Debug logs
-                                              console.log('Full item:', item);
-                                              console.log('Error response:', item.error_response);
+                                              // console.log('Full item:', item);
+                                              // console.log('Error response:', item.error_response);
                                               
                                               // Get error details from the complete response
                                               const errorSong = item.error_response?.data?.output?.songs?.[0];
                                               const apiError = item.error_response?.data?.error;
                                               
-                                              console.log('Error Song:', errorSong); // Debug log
+                                              // console.log('Error Song:', errorSong); // Debug log
                                               
                                               setErrorModalDetails({
                                                 isOpen: true,

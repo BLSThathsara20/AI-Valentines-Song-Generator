@@ -117,7 +117,7 @@ export function ShareSongEmail({ songTitle, songUrl, onClose }: ShareSongEmailPr
         sender: formData.senderName
       };
       const encodedData = btoa(JSON.stringify(songData));
-      const playPageUrl = `${window.location.origin}/lyrics-to-song/#/play/${encodedData}`;
+      const playPageUrl = `${window.location.origin}/#/play/${encodedData}`;
 
       const templateParams = {
         to_email: formData.recipientEmail,

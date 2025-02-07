@@ -31,5 +31,5 @@ export const getPreviewImageUrl = (): string => {
 export const createShareableSongUrl = (songPath: string): string => {
   const baseUrl = getBaseUrl();
   const cleanPath = songPath.startsWith('/') ? songPath.slice(1) : songPath;
-  return `${baseUrl}/lyrics-to-song/play/${cleanPath}`;
+  return `${baseUrl}/play/${cleanPath}`;
 }; 

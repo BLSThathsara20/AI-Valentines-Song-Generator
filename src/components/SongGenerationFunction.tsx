@@ -444,26 +444,26 @@ const SongGenerationFunction: React.FC<SongGenerationFunctionProps> = ({
                 </label>
                 
                 {/* Lyrics Guidelines */}
-                <div className="mb-4 p-4 bg-white/80 backdrop-blur-sm rounded-xl border border-pink-100">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <SparklesIcon className="w-4 h-4 text-pink-500" />
-                    Important Guidelines:
+                <div className="mb-4 p-4 bg-pink-50/50 backdrop-blur-sm rounded-xl border border-pink-100/50">
+                  <h4 className="text-sm font-medium text-gray-600 mb-3 flex items-center gap-2">
+                    <SparklesIcon className="w-4 h-4 text-pink-400" />
+                    Important Guidelines
                   </h4>
-                  <ul className="space-y-2 text-sm text-gray-600">
-                    <li className="flex items-start gap-2">
-                      <span className="text-pink-500 mt-0.5">•</span>
+                  <ul className="space-y-2.5 text-sm text-gray-500">
+                    <li className="flex items-start gap-2.5">
+                      <span className="text-pink-400 mt-0.5">•</span>
                       <span>Do not include copyrighted lyrics or content from existing songs</span>
                     </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-pink-500 mt-0.5">•</span>
+                    <li className="flex items-start gap-2.5">
+                      <span className="text-pink-400 mt-0.5">•</span>
                       <span>Avoid explicit, offensive, or inappropriate content</span>
                     </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-pink-500 mt-0.5">•</span>
+                    <li className="flex items-start gap-2.5">
+                      <span className="text-pink-400 mt-0.5">•</span>
                       <span>Keep the lyrics personal and original to create a unique song</span>
                     </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-pink-500 mt-0.5">•</span>
+                    <li className="flex items-start gap-2.5">
+                      <span className="text-pink-400 mt-0.5">•</span>
                       <span>Focus on expressing genuine emotions and feelings</span>
                     </li>
                   </ul>

@@ -62,6 +62,20 @@ export function GenerationLoadingModal({
     }
   }, [showSuccess, showSMSSuccess]);
 
+  // Handle body scroll lock
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -120,9 +134,31 @@ export function GenerationLoadingModal({
             />
           </div>
 
-          <div className="text-center px-6 pt-4">
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Your love song is being created</h3>
-           
+          <div className="text-center px-6 py-4">
+            {showSuccess ? (
+              <div className="text-left space-y-3">
+                <ul className="space-y-3 text-gray-800">
+                  <li className="flex items-start gap-2">
+                    <span className="text-pink-500 mt-1">•</span>
+                    <span>Song creation takes approximately 30 minutes on average. However, it may take up to 3 hours due to high demand.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-pink-500 mt-1">•</span>
+                    <span>You'll receive a notification via an email from "Honorvalentinessong@gmail.com" and an SMS from "Enfctn" once it's ready.</span>
+                  </li>
+                </ul>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-red-600 animate-gradient-x">
+                  Song Generation in Progress
+                </h3>
+                <p className="text-sm text-gray-600 leading-relaxed max-w-md mx-auto">
+                  Submit your Email and phone number to be notified when it's ready. 
+                  <span className="block mt-1 text-pink-500 font-medium">Thanks for your patience! 💝</span>
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
